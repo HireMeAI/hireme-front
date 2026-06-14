@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
+  const { id } = useParams();
+  const activeResumeId = resumeId || id;
   const { user } = useAuth();
   const [resume, setResume] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -52,13 +55,13 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   useEffect(() => {
     fetchResume();
     fetchGlobals();
-  }, [resumeId]);
+  }, [activeResumeId]);
 
   const fetchResume = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.resumes.get(resumeId);
+      const data = await api.resumes.get(activeResumeId);
       setResume(data);
       
       // Populate fields
@@ -112,7 +115,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
       }
 
       // Update core Resume details
-      const updatedResume = await api.resumes.update(resumeId, {
+      const updatedResume = await api.resumes.update(activeResumeId, {
         userId: resume.userId,
         title,
         summary,
@@ -135,7 +138,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   const handleAddExperience = async (e) => {
     e.preventDefault();
     try {
-      await api.experiences.create(resumeId, {
+      await api.experiences.create(activeResumeId, {
         position: expTitle,
         company: expCompany,
         description: expDesc,
@@ -160,7 +163,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   const handleDeleteExperience = async (expId) => {
     if (!window.confirm('Supprimer cette expérience ?')) return;
     try {
-      await api.experiences.delete(resumeId, expId);
+      await api.experiences.delete(activeResumeId, expId);
       fetchResume();
     } catch (err) {
       alert(err.message || 'Erreur lors de la suppression');
@@ -171,7 +174,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   const handleAddEducation = async (e) => {
     e.preventDefault();
     try {
-      await api.educations.create(resumeId, {
+      await api.educations.create(activeResumeId, {
         degree: eduDegree,
         institution: eduInst,
         description: eduDesc,
@@ -193,7 +196,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   const handleDeleteEducation = async (eduCode) => {
     if (!window.confirm('Supprimer cette formation ?')) return;
     try {
-      await api.educations.delete(resumeId, eduCode);
+      await api.educations.delete(activeResumeId, eduCode);
       fetchResume();
     } catch (err) {
       alert(err.message || 'Erreur lors de la suppression');
@@ -203,7 +206,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   // Skills actions
   const handleLinkSkill = async (skillId) => {
     try {
-      await api.resumes.addSkill(resumeId, skillId);
+      await api.resumes.addSkill(activeResumeId, skillId);
       fetchResume();
     } catch (err) {
       alert(err.message || 'Erreur lors de l\'ajout');
@@ -215,7 +218,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
     if (!newSkillName.trim()) return;
     try {
       const newSkill = await api.skills.create(newSkillName.trim(), 'ADVANCED');
-      await api.resumes.addSkill(resumeId, newSkill.id);
+      await api.resumes.addSkill(activeResumeId, newSkill.id);
       setNewSkillName('');
       fetchGlobals();
       fetchResume();
@@ -226,7 +229,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
 
   const handleUnlinkSkill = async (skillId) => {
     try {
-      await api.resumes.removeSkill(resumeId, skillId);
+      await api.resumes.removeSkill(activeResumeId, skillId);
       fetchResume();
     } catch (err) {
       alert(err.message || 'Erreur lors du retrait');
@@ -236,7 +239,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   // Languages actions
   const handleLinkLanguage = async (langId) => {
     try {
-      await api.resumes.addLanguage(resumeId, langId);
+      await api.resumes.addLanguage(activeResumeId, langId);
       fetchResume();
     } catch (err) {
       alert(err.message || 'Erreur lors de l\'ajout');
@@ -248,7 +251,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
     if (!newLangName.trim()) return;
     try {
       const newLang = await api.languages.create(newLangName.trim(), 'BILINGUAL');
-      await api.resumes.addLanguage(resumeId, newLang.id);
+      await api.resumes.addLanguage(activeResumeId, newLang.id);
       setNewLangName('');
       fetchGlobals();
       fetchResume();
@@ -259,7 +262,7 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
 
   const handleUnlinkLanguage = async (langId) => {
     try {
-      await api.resumes.removeLanguage(resumeId, langId);
+      await api.resumes.removeLanguage(activeResumeId, langId);
       fetchResume();
     } catch (err) {
       alert(err.message || 'Erreur lors du retrait');

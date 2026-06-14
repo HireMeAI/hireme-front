@@ -129,6 +129,20 @@ export const api = {
     }
   },
 
+  // --- USER PROFILE (all roles) ---
+  user: {
+    getMe: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/candidate/me`, {
+        method: 'GET',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        }
+      });
+      return handleResponse(res);
+    }
+  },
+
   // --- CANDIDATE PROFILE ---
   candidate: {
     getMe: async () => {
@@ -426,6 +440,60 @@ export const api = {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ title })
+      });
+      return handleResponse(res);
+    }
+  },
+
+  // --- JOB OFFERS ---
+  jobs: {
+    create: async (jobData) => {
+      const res = await fetch(`${API_BASE_URL}/api/jobs`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(jobData)
+      });
+      return handleResponse(res);
+    },
+
+    getById: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/jobs/${id}`, {
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
+    getByRecruiter: async (recruiterId) => {
+      const res = await fetch(`${API_BASE_URL}/api/jobs/recruiter/${recruiterId}`, {
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
+    search: async ({ contractType, remotePolicy, keyword } = {}) => {
+      const params = new URLSearchParams();
+      if (contractType) params.append('contractType', contractType);
+      if (remotePolicy) params.append('remotePolicy', remotePolicy);
+      if (keyword) params.append('keyword', keyword);
+      const res = await fetch(`${API_BASE_URL}/api/jobs?${params}`, {
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
+    update: async (id, jobData) => {
+      const res = await fetch(`${API_BASE_URL}/api/jobs/${id}`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(jobData)
+      });
+      return handleResponse(res);
+    },
+
+    delete: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/jobs/${id}`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders() }
       });
       return handleResponse(res);
     }

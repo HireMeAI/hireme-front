@@ -1,7 +1,6 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
@@ -23,15 +22,18 @@
   --text-secondary: hsl(240, 5%, 70%);
   --text-muted: hsl(240, 4%, 48%);
 
-  --primary: oklch(0.205 0 0);
-  --primary-glow: rgba(99, 102, 241, 0.1);
-  --primary-hover: hsl(246, 80%, 62%);
+  --primary: oklch(0.922 0 0);
+  --primary-glow: rgba(255, 255, 255, 0.08);
+  --primary-hover: oklch(0.85 0 0);
+  --primary-foreground: oklch(0.205 0 0);
 
-  --secondary: oklch(0.97 0 0);
-  --secondary-glow: rgba(59, 130, 246, 0.08);
-  --secondary-hover: hsl(210, 100%, 58%);
+  --secondary: oklch(0.269 0 0);
+  --secondary-glow: rgba(255, 255, 255, 0.03);
+  --secondary-hover: oklch(0.35 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
 
-  --accent: oklch(0.97 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
 
   --success: hsl(142, 70%, 45%);
   --success-bg: hsla(142, 70%, 45%, 0.08);
@@ -55,7 +57,26 @@
   --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-fast: all 0.1s ease-out;
 
-  --blur: none; /* Strip blurry background filters for high performance & clean lines */ --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --popover: oklch(1 0 0); --popover-foreground: oklch(0.145 0 0); --primary-foreground: oklch(0.985 0 0); --secondary-foreground: oklch(0.205 0 0); --muted: oklch(0.97 0 0); --muted-foreground: oklch(0.556 0 0); --accent-foreground: oklch(0.205 0 0); --destructive: oklch(0.577 0.245 27.325); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --ring: oklch(0.708 0 0); --chart-1: oklch(0.87 0 0); --chart-2: oklch(0.556 0 0); --chart-3: oklch(0.439 0 0); --chart-4: oklch(0.371 0 0); --chart-5: oklch(0.269 0 0); --radius: 0.625rem; --sidebar: oklch(0.985 0 0); --sidebar-foreground: oklch(0.145 0 0); --sidebar-primary: oklch(0.205 0 0); --sidebar-primary-foreground: oklch(0.985 0 0); --sidebar-accent: oklch(0.97 0 0); --sidebar-accent-foreground: oklch(0.205 0 0); --sidebar-border: oklch(0.922 0 0); --sidebar-ring: oklch(0.708 0 0);
+  --blur: none; /* Strip blurry background filters for high performance & clean lines */
+  
+  /* shadcn UI Color Mappings (Default Dark) */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  
+  --card: var(--bg-secondary);
+  --card-foreground: var(--text-primary);
+  
+  --popover: var(--bg-secondary);
+  --popover-foreground: var(--text-primary);
+  
+  --muted: var(--bg-tertiary);
+  --muted-foreground: var(--text-secondary);
+  
+  --border: var(--card-border);
+  --input: var(--card-border);
+  --ring: var(--primary);
+  
+  --radius: 0.625rem;
 }
 
 /* Premium Matte Light Theme */
@@ -72,15 +93,18 @@ body.light-theme {
   --text-secondary: hsl(240, 5%, 35%);
   --text-muted: hsl(240, 4%, 55%);
 
-  --primary: hsl(246, 80%, 50%);
-  --primary-glow: rgba(99, 102, 241, 0.06);
-  --primary-hover: hsl(246, 80%, 42%);
+  --primary: oklch(0.205 0 0);
+  --primary-glow: rgba(0, 0, 0, 0.05);
+  --primary-hover: oklch(0.3 0 0);
+  --primary-foreground: oklch(0.985 0 0);
 
-  --secondary: hsl(210, 100%, 42%);
-  --secondary-glow: rgba(59, 130, 246, 0.05);
-  --secondary-hover: hsl(210, 100%, 35%);
+  --secondary: oklch(0.97 0 0);
+  --secondary-glow: rgba(0, 0, 0, 0.02);
+  --secondary-hover: oklch(0.9 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
 
-  --accent: hsl(240, 5%, 20%);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -193,7 +217,7 @@ a:hover {
 
 .btn-primary {
   background-color: var(--primary);
-  color: white;
+  color: var(--primary-foreground);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 .btn-primary:hover {
@@ -201,12 +225,12 @@ a:hover {
 }
 
 .btn-secondary {
-  background-color: var(--bg-secondary);
+  background-color: var(--secondary);
   border: 1px solid var(--card-border);
-  color: var(--text-primary);
+  color: var(--secondary-foreground);
 }
 .btn-secondary:hover {
-  background-color: var(--bg-tertiary);
+  background-color: var(--secondary-hover);
   border-color: var(--text-muted);
 }
 

@@ -9,7 +9,8 @@ export const AuthProvider = ({ children }) => {
     return {
       ...userData,
       name: userData.name || userData.firstName || '',
-      title: userData.title || userData.desiredJobTitle || ''
+      title: userData.title || userData.desiredJobTitle || '',
+      role: userData.role || 'CANDIDATE'
     };
   };
 
@@ -25,14 +26,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Initialize and synchronize authentication state
   useEffect(() => {
     const initAuth = async () => {
       const savedToken = localStorage.getItem('hireme_token');
       if (savedToken) {
         try {
-          // Verify token by retrieving candidate profile
-          const profile = await api.candidate.getMe();
+          const profile = await api.user.getMe();
           if (profile) {
             const normalized = normalizeUser(profile);
             setUser(normalized);
@@ -40,7 +39,6 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (err) {
           console.error("Token verification failed", err);
-          // Token expired or invalid
           logout();
         }
       }
@@ -49,45 +47,35 @@ export const AuthProvider = ({ children }) => {
 
     initAuth();
 
-    // Listen to global unauthorized events from API client
-    const handleUnauthorized = () => {
-      logout();
-    };
-
+    const handleUnauthorized = () => logout();
     window.addEventListener('auth-unauthorized', handleUnauthorized);
-    return () => {
-      window.removeEventListener('auth-unauthorized', handleUnauthorized);
-    };
+    return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
   }, []);
 
   const login = async (email, password) => {
     setError(null);
     try {
       const data = await api.auth.login(email, password);
-      // Backend LoginResponseDto contains token and refreshToken (or accessToken, user etc.)
-      // Let's inspect the returned model structure or assume standard { token, user }
       const tokenVal = data.token || data.accessToken;
-      if (!tokenVal) {
-        throw new Error("No token returned from server");
-      }
-      
+      if (!tokenVal) throw new Error("No token returned from server");
+
       localStorage.setItem('hireme_token', tokenVal);
       setToken(tokenVal);
-      
-      // Try to load full user details using the newly acquired token
+
+      // Use user from login response (now includes role), then enrich with full profile
+      const baseUser = normalizeUser(data.user || { email });
+      setUser(baseUser);
+      localStorage.setItem('hireme_user', JSON.stringify(baseUser));
+
       try {
-        const fullProfile = await api.candidate.getMe();
+        const fullProfile = await api.user.getMe();
         const normalized = normalizeUser(fullProfile);
         setUser(normalized);
         localStorage.setItem('hireme_user', JSON.stringify(normalized));
       } catch (profileErr) {
-        // Fallback to minimal user details if getMe fails or isn't candidate
-        const fallbackUser = data.user || { email, role: 'CANDIDATE' };
-        const normalized = normalizeUser(fallbackUser);
-        setUser(normalized);
-        localStorage.setItem('hireme_user', JSON.stringify(normalized));
+        // Keep base user if profile fetch fails
       }
-      
+
       return true;
     } catch (err) {
       setError(err.message || 'Login failed');
@@ -99,7 +87,6 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const response = await api.auth.register({ email, password, name, lastName, bio, title });
-      // Depending on workflow, register might require email verification first.
       return response;
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -116,7 +103,7 @@ export const AuthProvider = ({ children }) => {
 
   const syncProfile = async () => {
     try {
-      const updatedProfile = await api.candidate.getMe();
+      const updatedProfile = await api.user.getMe();
       if (updatedProfile) {
         const normalized = normalizeUser(updatedProfile);
         setUser(normalized);
@@ -147,8 +134,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
