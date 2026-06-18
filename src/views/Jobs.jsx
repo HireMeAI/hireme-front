@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 
@@ -260,8 +261,9 @@ export default function Jobs() {
         )}
       </section>
 
-      {/* Apply modal */}
-      {applyJob && (
+      {/* Apply modal — rendu via portal sur document.body pour échapper au
+          conteneur transformé (.fade-in) qui sinon décale le position:fixed. */}
+      {applyJob && createPortal(
         <div className="modal-overlay" onClick={() => !applyLoading && setApplyJob(null)}>
           <div className="card modal-box scale-in" onClick={(e) => e.stopPropagation()}>
             {!applyResult ? (
@@ -331,7 +333,8 @@ export default function Jobs() {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style>{`

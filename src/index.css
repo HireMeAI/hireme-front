@@ -494,8 +494,11 @@ body.light-theme .navbar {
 }
 
 /* Animations */
+/* Pas de `forwards` : le conteneur ne doit pas conserver de transform après
+   l'entrée, sinon il devient le bloc englobant des enfants position:fixed
+   (modales) et les décale. L'état final de l'anim == l'état de base. */
 .fade-in {
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeIn 0.3s ease;
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }

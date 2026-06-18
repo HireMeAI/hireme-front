@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+
+/** Normalise un score (0..1 ou 0..100) en pourcentage entier. */
+const toPercent = (score) => {
+  if (score === null || score === undefined) return null;
+  return Math.round(score <= 1 ? score * 100 : score);
+};
+const scoreTone = (pct) => (pct >= 75 ? 'high' : pct >= 50 ? 'mid' : 'low');
+const shortId = (id) => (id ? id.toString().slice(0, 8) : '—');
+
+const APP_STATUS_LABELS = {
+  SUBMITTED: 'Reçue',
+  UNDER_REVIEW: 'En revue',
+  ACCEPTED: 'Acceptée',
+  REJECTED: 'Refusée'
+};
 
 const CONTRACT_LABELS = {
   FULL_TIME: 'CDI',
@@ -54,6 +70,12 @@ export default function RecruiterDashboard() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+
+  // Applications viewer state
+  const [appsOffer, setAppsOffer] = useState(null);
+  const [appsList, setAppsList] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const [appsError, setAppsError] = useState(null);
 
   useEffect(() => {
     if (user?.id) fetchOffers();
@@ -153,6 +175,21 @@ export default function RecruiterDashboard() {
     }
   };
 
+  const openApplications = async (offer) => {
+    setAppsOffer(offer);
+    setAppsList([]);
+    setAppsError(null);
+    setAppsLoading(true);
+    try {
+      const data = await api.matching.getByJob(offer.id);
+      setAppsList(data || []);
+    } catch (err) {
+      setAppsError(err.message || 'Impossible de charger les candidatures.');
+    } finally {
+      setAppsLoading(false);
+    }
+  };
+
   const openCount = offers.filter(o => o.status === 'OPEN').length;
   const draftCount = offers.filter(o => o.status === 'DRAFT').length;
 
@@ -226,6 +263,7 @@ export default function RecruiterDashboard() {
             onDelete={handleDelete}
             onToggleStatus={handleToggleStatus}
             onCreate={openCreate}
+            onViewApplications={openApplications}
           />
         )}
         {activeTab === 'profile' && <ProfileTab user={user} />}
@@ -332,6 +370,66 @@ export default function RecruiterDashboard() {
         </div>
       )}
 
+      {/* Applications viewer (anonymisé — recommandations débiaisées) */}
+      {appsOffer && createPortal(
+        <div className="modal-overlay" onClick={() => setAppsOffer(null)}>
+          <div className="card modal-card modal-card-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Candidatures reçues</h2>
+                <p className="apps-sub">{appsOffer.title}{appsOffer.company ? ` · ${appsOffer.company}` : ''}</p>
+              </div>
+              <button className="btn-close" onClick={() => setAppsOffer(null)}>×</button>
+            </div>
+
+            {appsLoading ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                <span className="spinner large"></span>
+                <p style={{ marginTop: '12px' }}>Chargement des candidatures…</p>
+              </div>
+            ) : appsError ? (
+              <div className="alert alert-danger"><span>{appsError}</span></div>
+            ) : appsList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                <p>Aucune candidature pour cette offre pour le moment.</p>
+              </div>
+            ) : (
+              <>
+                <p className="apps-hint">
+                  {appsList.length} candidature{appsList.length > 1 ? 's' : ''}, classée{appsList.length > 1 ? 's' : ''} par compatibilité IA.
+                  Les profils sont anonymisés (débiaisage RGPD) jusqu'à la prise de contact.
+                </p>
+                <div className="apps-list">
+                  {appsList.map((a, i) => {
+                    const pct = toPercent(a.matchScore);
+                    return (
+                      <div className="app-row" key={a.id}>
+                        <span className="app-rank">#{i + 1}</span>
+                        <div className="app-main">
+                          <strong>Candidat {shortId(a.candidateId)}</strong>
+                          <div className="app-meta">
+                            <span className="badge badge-status badge-muted">{APP_STATUS_LABELS[a.status] || a.status}</span>
+                            <span className="app-src">via {a.source || 'MANUAL'}</span>
+                          </div>
+                        </div>
+                        {pct !== null && (
+                          <div className={`score-chip score-${scoreTone(pct)}`} title="Score de compatibilité IA">{pct}%</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setAppsOffer(null)}>Fermer</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       <style>{`
         .recruiter-dashboard { padding-top: 10px; padding-bottom: 40px; text-align: left; }
         .dash-welcome { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
@@ -383,6 +481,20 @@ export default function RecruiterDashboard() {
         .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
         @media (max-width: 580px) { .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--card-border); }
+        /* applications viewer */
+        .apps-sub { font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px; }
+        .apps-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45; }
+        .apps-list { display: flex; flex-direction: column; gap: 8px; }
+        .app-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: var(--bg-secondary); }
+        .app-rank { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); min-width: 28px; }
+        .app-main { flex: 1; }
+        .app-main strong { font-size: 0.9rem; }
+        .app-meta { display: flex; align-items: center; gap: 10px; margin-top: 5px; }
+        .app-src { font-size: 0.75rem; color: var(--text-muted); }
+        .score-chip { flex-shrink: 0; font-weight: 700; font-size: 0.95rem; padding: 8px 12px; border-radius: var(--radius-sm); min-width: 56px; text-align: center; }
+        .score-high { background: hsla(150,45%,38%,0.14); color: var(--success); border: 1px solid hsla(150,45%,38%,0.3); }
+        .score-mid { background: hsla(34,78%,48%,0.14); color: var(--warning); border: 1px solid hsla(34,78%,48%,0.3); }
+        .score-low { background: hsla(2,64%,52%,0.12); color: var(--danger); border: 1px solid hsla(2,64%,52%,0.25); }
         .btn-icon { background: none; border: none; padding: 6px; border-radius: var(--radius-sm); cursor: pointer; transition: var(--transition-fast); display: flex; color: var(--text-muted); }
         .btn-icon:hover { background: var(--bg-secondary); color: var(--text-primary); }
         /* profile */
@@ -399,7 +511,7 @@ export default function RecruiterDashboard() {
   );
 }
 
-function OffersTab({ offers, loading, error, onEdit, onDelete, onToggleStatus, onCreate }) {
+function OffersTab({ offers, loading, error, onEdit, onDelete, onToggleStatus, onCreate, onViewApplications }) {
   if (loading) return (
     <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
       <span className="spinner large"></span>
@@ -483,9 +595,10 @@ function OffersTab({ offers, loading, error, onEdit, onDelete, onToggleStatus, o
           )}
 
           <div className="offer-footer">
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {offer.createdAt ? new Date(offer.createdAt).toLocaleDateString('fr-FR') : ''}
-            </span>
+            <button className="btn btn-sm btn-secondary" onClick={() => onViewApplications(offer)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Candidatures
+            </button>
             <button
               className={`btn btn-sm ${offer.status === 'OPEN' ? 'btn-secondary' : 'btn-primary'}`}
               onClick={() => onToggleStatus(offer)}

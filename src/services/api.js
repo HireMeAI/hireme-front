@@ -616,6 +616,15 @@ export const api = {
         headers: { ...getAuthHeaders() }
       });
       return handleResponse(res);
+    },
+
+    // Applications received on a job offer, sorted by match score (desc) — recruiter view
+    getByJob: async (jobOfferId) => {
+      const res = await fetch(`${API_BASE_URL}/api/matching/job/${jobOfferId}`, {
+        method: 'GET',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
     }
   },
 
