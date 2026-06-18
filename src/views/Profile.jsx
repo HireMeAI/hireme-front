@@ -3,16 +3,19 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 
 export default function Profile() {
-  const { user, syncProfile } = useAuth();
-  
+  const { user, syncProfile, logoutAll, deleteAccount } = useAuth();
+
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
   const [title, setTitle] = useState('');
   const [bio, setBio] = useState('');
-  
+
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
+
+  const [securityBusy, setSecurityBusy] = useState(false);
+  const [securityError, setSecurityError] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -40,6 +43,33 @@ export default function Profile() {
       setError(err.message || 'Erreur lors de la mise à jour du profil');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (!window.confirm('Déconnecter toutes vos sessions actives sur tous les appareils ?')) return;
+    setSecurityError(null);
+    setSecurityBusy(true);
+    try {
+      await logoutAll();
+      // clearSession() inside logoutAll resets auth → routing redirects to /login.
+    } catch (err) {
+      setSecurityError(err.message || 'Impossible de déconnecter les sessions.');
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Supprimer définitivement votre compte et toutes vos données (RGPD) ? Cette action est irréversible.')) return;
+    setSecurityError(null);
+    setSecurityBusy(true);
+    try {
+      await deleteAccount();
+      // Account gone → auth cleared → redirect to landing/login.
+    } catch (err) {
+      setSecurityError(err.message || 'La suppression du compte a échoué.');
+      setSecurityBusy(false);
     }
   };
 
@@ -142,6 +172,42 @@ export default function Profile() {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Security & RGPD */}
+          <div className="card security-card">
+            <div className="card-header-block">
+              <h2>Sécurité &amp; confidentialité</h2>
+              <p>Gérez vos sessions et vos données personnelles (RGPD).</p>
+            </div>
+
+            {securityError && (
+              <div className="alert alert-danger scale-in">
+                <span>{securityError}</span>
+              </div>
+            )}
+
+            <div className="security-row">
+              <div className="security-text">
+                <strong>Déconnexion de tous les appareils</strong>
+                <span>Révoque toutes vos sessions actives, partout.</span>
+              </div>
+              <button className="btn btn-secondary" onClick={handleLogoutAll} disabled={securityBusy}>
+                Déconnecter partout
+              </button>
+            </div>
+
+            <div className="divider"></div>
+
+            <div className="security-row">
+              <div className="security-text">
+                <strong className="danger-text">Supprimer mon compte</strong>
+                <span>Efface définitivement votre compte et vos données. Irréversible.</span>
+              </div>
+              <button className="btn btn-danger" onClick={handleDeleteAccount} disabled={securityBusy}>
+                {securityBusy ? 'Traitement…' : 'Supprimer'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -258,6 +324,38 @@ export default function Profile() {
           margin-top: 24px;
           padding-top: 16px;
           border-top: 1px solid var(--card-border);
+        }
+        .security-card {
+          margin-top: 24px;
+          text-align: left;
+        }
+        .security-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .security-text {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .security-text strong {
+          font-size: 0.95rem;
+          color: var(--text-primary);
+        }
+        .security-text span {
+          font-size: 0.82rem;
+          color: var(--text-secondary);
+        }
+        .danger-text {
+          color: var(--danger);
+        }
+        @media (max-width: 600px) {
+          .security-row {
+            flex-direction: column;
+            align-items: flex-start;
+          }
         }
       `}</style>
     </div>

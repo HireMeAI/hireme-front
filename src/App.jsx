@@ -7,6 +7,7 @@ import Dashboard from './views/Dashboard';
 import RecruiterDashboard from './views/RecruiterDashboard';
 import ResumeBuilder from './views/ResumeBuilder';
 import Profile from './views/Profile';
+import Jobs from './views/Jobs';
 
 function AppContent() {
   const { isAuthenticated, loading, logout, user } = useAuth();
@@ -126,13 +127,23 @@ function AppContent() {
 
           <ul className="nav-links">
             <li>
-              <NavLink 
+              <NavLink
                 to="/dashboard"
                 className={({ isActive }) => `nav-btn-link ${isActive || location.pathname.startsWith('/builder') ? 'active' : ''}`}
               >
                 Tableau de bord
               </NavLink>
             </li>
+            {!isRecruiter && !isAdmin && (
+              <li>
+                <NavLink
+                  to="/jobs"
+                  className={({ isActive }) => `nav-btn-link ${isActive ? 'active' : ''}`}
+                >
+                  Offres
+                </NavLink>
+              </li>
+            )}
             <li>
               <NavLink 
                 to="/profile"
@@ -272,15 +283,26 @@ function AppContent() {
         }
       />
 
-      <Route 
-        path="/profile" 
+      <Route
+        path="/profile"
         element={
           isAuthenticated ? (
             renderAuthenticatedLayout(<Profile />)
           ) : (
             <Navigate to="/login" replace />
           )
-        } 
+        }
+      />
+
+      <Route
+        path="/jobs"
+        element={
+          isAuthenticated
+            ? isRecruiter || isAdmin
+              ? <Navigate to="/dashboard" replace />
+              : renderAuthenticatedLayout(<Jobs />)
+            : <Navigate to="/login" replace />
+        }
       />
 
       <Route

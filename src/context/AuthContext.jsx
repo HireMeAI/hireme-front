@@ -26,6 +26,38 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Clears the local session without touching the server (used on hard failures).
+  const clearSession = () => {
+    localStorage.removeItem('hireme_token');
+    localStorage.removeItem('hireme_refresh_token');
+    localStorage.removeItem('hireme_user');
+    setToken(null);
+    setUser(null);
+  };
+
+  // Exchanges the stored refresh token for a fresh access/refresh pair.
+  const refreshSession = async () => {
+    const refreshToken = localStorage.getItem('hireme_refresh_token');
+    if (!refreshToken) return false;
+    try {
+      const data = await api.session.refresh(refreshToken);
+      const tokenVal = data?.accessToken || data?.token;
+      if (!tokenVal) return false;
+      localStorage.setItem('hireme_token', tokenVal);
+      setToken(tokenVal);
+      if (data.refreshToken) localStorage.setItem('hireme_refresh_token', data.refreshToken);
+      if (data.user) {
+        const normalized = normalizeUser(data.user);
+        setUser(normalized);
+        localStorage.setItem('hireme_user', JSON.stringify(normalized));
+      }
+      return true;
+    } catch (err) {
+      console.error('Token refresh failed', err);
+      return false;
+    }
+  };
+
   useEffect(() => {
     const initAuth = async () => {
       const savedToken = localStorage.getItem('hireme_token');
@@ -38,8 +70,22 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('hireme_user', JSON.stringify(normalized));
           }
         } catch (err) {
-          console.error("Token verification failed", err);
-          logout();
+          // Access token likely expired — try a silent refresh before giving up.
+          const refreshed = await refreshSession();
+          if (refreshed) {
+            try {
+              const profile = await api.user.getMe();
+              if (profile) {
+                const normalized = normalizeUser(profile);
+                setUser(normalized);
+                localStorage.setItem('hireme_user', JSON.stringify(normalized));
+              }
+            } catch (e) {
+              clearSession();
+            }
+          } else {
+            clearSession();
+          }
         }
       }
       setLoading(false);
@@ -47,9 +93,15 @@ export const AuthProvider = ({ children }) => {
 
     initAuth();
 
-    const handleUnauthorized = () => logout();
+    // Proactive refresh well within the 1h access-token lifetime.
+    const refreshInterval = setInterval(() => { refreshSession(); }, 30 * 60 * 1000);
+
+    const handleUnauthorized = () => clearSession();
     window.addEventListener('auth-unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
+    return () => {
+      clearInterval(refreshInterval);
+      window.removeEventListener('auth-unauthorized', handleUnauthorized);
+    };
   }, []);
 
   const login = async (email, password) => {
@@ -60,6 +112,7 @@ export const AuthProvider = ({ children }) => {
       if (!tokenVal) throw new Error("No token returned from server");
 
       localStorage.setItem('hireme_token', tokenVal);
+      if (data.refreshToken) localStorage.setItem('hireme_refresh_token', data.refreshToken);
       setToken(tokenVal);
 
       // Use user from login response (now includes role), then enrich with full profile
@@ -94,11 +147,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('hireme_token');
-    localStorage.removeItem('hireme_user');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    // Best-effort server-side revocation of the current access token.
+    try { await api.session.logout(); } catch (e) { /* ignore network/expiry errors */ }
+    clearSession();
+  };
+
+  // Revokes every active session for this user, then clears locally.
+  const logoutAll = async () => {
+    try { await api.session.logoutAll(); } catch (e) { /* ignore */ }
+    clearSession();
+  };
+
+  // RGPD: permanently deletes the account, then clears locally.
+  const deleteAccount = async () => {
+    await api.users.deleteMe();
+    clearSession();
   };
 
   const syncProfile = async () => {
@@ -125,6 +189,9 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    logoutAll,
+    deleteAccount,
+    refreshSession,
     syncProfile,
     setError
   };

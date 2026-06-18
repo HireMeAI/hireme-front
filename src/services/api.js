@@ -409,14 +409,39 @@ export const api = {
       return handleResponse(res);
     },
 
+    get: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/skills/${id}`, {
+        method: 'GET',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
     create: async (title) => {
       const res = await fetch(`${API_BASE_URL}/api/skills`, {
         method: 'POST',
-        headers: { 
+        headers: {
           ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ title })
+      });
+      return handleResponse(res);
+    },
+
+    update: async (id, title) => {
+      const res = await fetch(`${API_BASE_URL}/api/skills/${id}`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      return handleResponse(res);
+    },
+
+    delete: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/skills/${id}`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders() }
       });
       return handleResponse(res);
     }
@@ -432,14 +457,39 @@ export const api = {
       return handleResponse(res);
     },
 
+    get: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/languages/${id}`, {
+        method: 'GET',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
     create: async (title) => {
       const res = await fetch(`${API_BASE_URL}/api/languages`, {
         method: 'POST',
-        headers: { 
+        headers: {
           ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ title })
+      });
+      return handleResponse(res);
+    },
+
+    update: async (id, title) => {
+      const res = await fetch(`${API_BASE_URL}/api/languages/${id}`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      return handleResponse(res);
+    },
+
+    delete: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/languages/${id}`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders() }
       });
       return handleResponse(res);
     }
@@ -509,14 +559,103 @@ export const api = {
       return handleResponse(res);
     },
 
+    get: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/templates/${id}`, {
+        method: 'GET',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
     create: async (templateData) => {
       const res = await fetch(`${API_BASE_URL}/api/templates`, {
         method: 'POST',
-        headers: { 
+        headers: {
           ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(templateData)
+      });
+      return handleResponse(res);
+    },
+
+    update: async (id, templateData) => {
+      const res = await fetch(`${API_BASE_URL}/api/templates/${id}`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(templateData)
+      });
+      return handleResponse(res);
+    },
+
+    delete: async (id) => {
+      const res = await fetch(`${API_BASE_URL}/api/templates/${id}`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    }
+  },
+
+  // --- MATCHING / APPLICATIONS (AI scoring) ---
+  matching: {
+    // applyData: { candidateId, resumeId, jobOfferId, resumeText, jobText, knownPii?, note?, source? }
+    apply: async (applyData) => {
+      const res = await fetch(`${API_BASE_URL}/api/matching/applications`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(applyData)
+      });
+      return handleResponse(res);
+    },
+
+    // Applications for a given resume, sorted by match score (desc)
+    getByResume: async (resumeId) => {
+      const res = await fetch(`${API_BASE_URL}/api/matching/${resumeId}`, {
+        method: 'GET',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    }
+  },
+
+  // --- USER ACCOUNT ---
+  users: {
+    // RGPD: delete the authenticated user's account
+    deleteMe: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/users/me`, {
+        method: 'DELETE',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    }
+  },
+
+  // --- SESSION MANAGEMENT ---
+  session: {
+    // Exchanges a valid refresh token for a fresh access/refresh pair.
+    refresh: async (refreshToken) => {
+      const res = await fetch(`${API_BASE_URL}/api/session/refresh-token`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${refreshToken}` }
+      });
+      return handleResponse(res);
+    },
+
+    // Revokes the current access token (server-side).
+    logout: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/session/logout`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
+    },
+
+    // Revokes every active token for the authenticated user.
+    logoutAll: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/session/logout-all`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders() }
       });
       return handleResponse(res);
     }
