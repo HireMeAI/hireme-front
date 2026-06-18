@@ -337,7 +337,7 @@ export default function Landing({ onNavigateToLogin, onNavigateToRegister }) {
           transition: var(--transition);
         }
         body.light-theme .landing-header {
-          background-color: rgba(255, 255, 255, 0.8);
+          background-color: hsla(40, 30%, 99%, 0.85);
         }
         .landing-logo {
           font-family: var(--font-heading);
@@ -410,14 +410,13 @@ export default function Landing({ onNavigateToLogin, onNavigateToRegister }) {
         }
         .hero-badge {
           display: inline-block;
-          padding: 4px 10px;
-          background: var(--bg-secondary);
-          border: 1px solid var(--card-border);
+          padding: 5px 12px;
+          background: var(--primary-glow);
           color: var(--primary);
-          font-size: 0.75rem;
-          font-weight: 500;
-          border-radius: 4px;
-          margin-bottom: 16px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          border-radius: 999px;
+          margin-bottom: 18px;
         }
         .hero-content h1 {
           font-size: clamp(2.2rem, 5vw, 3.2rem);

@@ -19,8 +19,8 @@ function AppContent() {
   const [resetToken, setResetToken] = useState(null);
   const [appNotification, setAppNotification] = useState(null);
 
-  // Light / Dark theme state (default dark as premium)
-  const [isLightTheme, setIsLightTheme] = useState(false);
+  // Light / Dark theme state (default light: thème crème + terracotta du template)
+  const [isLightTheme, setIsLightTheme] = useState(true);
 
   useEffect(() => {
     // Parse query params for redirect finalization
@@ -187,7 +187,7 @@ function AppContent() {
             color: var(--text-muted);
           }
           body.light-theme .footer-layout {
-            background: rgba(255, 255, 255, 0.4);
+            background: hsla(40, 30%, 99%, 0.5);
           }
         `}</style>
       </>
