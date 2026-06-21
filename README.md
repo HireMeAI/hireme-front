@@ -1,16 +1,21 @@
-# React + Vite
+# HireMe — Frontend (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Interface utilisateur de la plateforme HireMe. L'application est développée en React.js, packagée avec Vite, et utilise Tailwind CSS pour le style (Atomic Design).
 
-Currently, two official plugins are available:
+## Lancer en local
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+# 1. Installer les dépendances
+npm install
 
-## React Compiler
+# 2. Lancer le serveur de développement
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Tests Automatisés
 
-## Expanding the ESLint configuration
+*Note : Les tests frontend (Jest/React Testing Library) ne sont pas encore configurés dans ce projet.* 
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Les tests existants se concentrent actuellement sur les backends :
+- L'API ML Engine (Python / `pytest`)
+- Les microservices Java / Spring Boot (`JUnit` / `Mockito`)
