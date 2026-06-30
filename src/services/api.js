@@ -635,6 +635,14 @@ export const api = {
         headers: { ...getAuthHeaders() }
       });
       return handleResponse(res);
+    },
+
+    updateStatus: async (applicationId, status) => {
+      const res = await fetch(`${API_BASE_URL}/api/matching/applications/${applicationId}/status?status=${status}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders() }
+      });
+      return handleResponse(res);
     }
   },
 

@@ -11,12 +11,7 @@ const toPercent = (score) => {
 const scoreTone = (pct) => (pct >= 75 ? 'high' : pct >= 50 ? 'mid' : 'low');
 const shortId = (id) => (id ? id.toString().slice(0, 8) : '—');
 
-const APP_STATUS_LABELS = {
-  SUBMITTED: 'Reçue',
-  UNDER_REVIEW: 'En revue',
-  ACCEPTED: 'Acceptée',
-  REJECTED: 'Refusée'
-};
+
 
 const CONTRACT_LABELS = {
   FULL_TIME: 'CDI',
@@ -76,6 +71,33 @@ export default function RecruiterDashboard() {
   const [appsList, setAppsList] = useState([]);
   const [appsLoading, setAppsLoading] = useState(false);
   const [appsError, setAppsError] = useState(null);
+
+  // Resume viewer state
+  const [selectedResume, setSelectedResume] = useState(null);
+  const [resumeError, setResumeError] = useState(null);
+
+  const viewResume = async (resumeId, applicantId, note) => {
+    setResumeError(null);
+    setSelectedResume({ applicantId, note, loading: true });
+    try {
+      const data = await api.resumes.get(resumeId);
+      setSelectedResume({ ...data, applicantId, note, loading: false });
+    } catch (err) {
+      setResumeError(err.message || 'Impossible de charger le CV.');
+      setSelectedResume(null);
+    }
+  };
+
+  const handleStatusChange = async (applicationId, newStatus) => {
+    try {
+      const updated = await api.matching.updateStatus(applicationId, newStatus);
+      setAppsList((prev) =>
+        prev.map((app) => (app.id === applicationId ? { ...app, status: updated.status } : app))
+      );
+    } catch (err) {
+      alert(err.message || 'Impossible de mettre à jour le statut.');
+    }
+  };
 
   useEffect(() => {
     if (user?.id) fetchOffers();
@@ -408,13 +430,25 @@ export default function RecruiterDashboard() {
                         <div className="app-main">
                           <strong>Candidat {shortId(a.candidateId)}</strong>
                           <div className="app-meta">
-                            <span className="badge badge-status badge-muted">{APP_STATUS_LABELS[a.status] || a.status}</span>
+                            <select
+                              className="form-control form-control-sm !py-[1px] !px-2 !w-[110px] !text-[0.74rem] font-semibold border-[var(--card-border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] rounded-md cursor-pointer"
+                              value={a.status}
+                              onChange={(e) => handleStatusChange(a.id, e.target.value)}
+                            >
+                              <option value="SUBMITTED">Reçue</option>
+                              <option value="VIEWED">En revue</option>
+                              <option value="ACCEPTED">Acceptée</option>
+                              <option value="REJECTED">Refusée</option>
+                            </select>
                             <span className="app-src">via {a.source || 'MANUAL'}</span>
                           </div>
                         </div>
-                        {pct !== null && (
-                          <div className={`score-chip score-${scoreTone(pct)}`} title="Score de compatibilité IA">{pct}%</div>
-                        )}
+                        <div className="flex items-center gap-3">
+                          {pct !== null && (
+                            <div className={`score-chip score-${scoreTone(pct)}`} title="Score de compatibilité IA">{pct}%</div>
+                          )}
+                          <button className="btn btn-secondary btn-sm" onClick={() => viewResume(a.resumeId, a.candidateId, a.note)}>Voir le CV</button>
+                        </div>
                       </div>
                     );
                   })}
@@ -424,6 +458,135 @@ export default function RecruiterDashboard() {
 
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setAppsOffer(null)}>Fermer</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* CV detail modal — rendu via portal sur document.body */}
+      {selectedResume && createPortal(
+        <div className="modal-overlay" onClick={() => setSelectedResume(null)}>
+          <div className="card modal-card modal-card-lg scale-in max-h-[85vh] overflow-y-auto flex flex-col text-left" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2>Curriculum Vitae</h2>
+                <p className="apps-sub">Candidat {shortId(selectedResume.applicantId)} {selectedResume.title ? `— ${selectedResume.title}` : ''}</p>
+              </div>
+              <button className="btn-close" onClick={() => setSelectedResume(null)}>×</button>
+            </div>
+
+            <div className="border-b border-[var(--card-border)] mb-4 w-full"></div>
+
+            {selectedResume.loading ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                <span className="spinner large"></span>
+                <p style={{ marginTop: '12px' }}>Chargement du CV…</p>
+              </div>
+            ) : (
+              <>
+                {/* Note de motivation */}
+                {selectedResume.note && (
+                  <div className="mb-5 p-3.5 border border-amber-200/30 bg-amber-500/[0.04] rounded-[8px]" style={{ border: '1px solid rgba(245, 158, 11, 0.2)', backgroundColor: 'rgba(245, 158, 11, 0.05)' }}>
+                    <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Note de motivation</h4>
+                    <p className="text-[0.88rem] text-[var(--text-primary)] italic">« {selectedResume.note} »</p>
+                  </div>
+                )}
+
+                {/* Profile summary / Bio */}
+                {selectedResume.summary && (
+                  <div className="mb-5">
+                    <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Résumé professionnel</h4>
+                    <p className="text-[0.88rem] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">{selectedResume.summary}</p>
+                  </div>
+                )}
+
+                {/* Experiences */}
+                <div className="mb-5">
+                  <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Expériences professionnelles</h4>
+                  {!selectedResume.experiences || selectedResume.experiences.length === 0 ? (
+                    <p className="text-[0.83rem] text-[var(--text-muted)] italic">Aucune expérience renseignée.</p>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {selectedResume.experiences.map((exp) => (
+                        <div key={exp.id || exp.position} className="p-3.5 border border-[var(--card-border)] rounded-[8px] bg-[var(--bg-secondary)]">
+                          <div className="flex justify-between items-start">
+                            <strong className="text-[0.9rem] text-[var(--text-primary)]">{exp.position}</strong>
+                            <span className="text-[0.75rem] text-[var(--text-muted)]">
+                              {exp.startDate ? exp.startDate.substring(0, 7) : ''}
+                              {exp.endDate ? ` – ${exp.endDate.substring(0, 7)}` : ' – Présent'}
+                            </span>
+                          </div>
+                          <span className="text-[0.83rem] text-[var(--text-muted)]">{exp.company}</span>
+                          {exp.description && <p className="text-[0.83rem] text-[var(--text-secondary)] mt-2 whitespace-pre-line leading-relaxed">{exp.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Educations */}
+                <div className="mb-5">
+                  <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Formations & Diplômes</h4>
+                  {!selectedResume.educations || selectedResume.educations.length === 0 ? (
+                    <p className="text-[0.83rem] text-[var(--text-muted)] italic">Aucune formation renseignée.</p>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      {selectedResume.educations.map((edu) => (
+                        <div key={edu.id || edu.degree} className="p-3.5 border border-[var(--card-border)] rounded-[8px] bg-[var(--bg-secondary)]">
+                          <div className="flex justify-between items-start">
+                            <strong className="text-[0.9rem] text-[var(--text-primary)]">{edu.degree}</strong>
+                            <span className="text-[0.75rem] text-[var(--text-muted)]">
+                              {edu.startDate ? edu.startDate.substring(0, 7) : ''}
+                              {edu.endDate ? ` – ${edu.endDate.substring(0, 7)}` : ''}
+                            </span>
+                          </div>
+                          <span className="text-[0.83rem] text-[var(--text-muted)]">{edu.institution}</span>
+                          {edu.description && <p className="text-[0.83rem] text-[var(--text-secondary)] mt-2 whitespace-pre-line leading-relaxed">{edu.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Skills & Languages */}
+                <div className="grid grid-cols-2 gap-4 mb-5 max-[500px]:grid-cols-1">
+                  <div>
+                    <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Compétences</h4>
+                    {!selectedResume.skills || selectedResume.skills.length === 0 ? (
+                      <p className="text-[0.83rem] text-[var(--text-muted)] italic">Aucune compétence renseignée.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedResume.skills.map((s) => (
+                          <span key={s.id || s.title} className="skill-chip">{s.title || s}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Langues</h4>
+                    {!selectedResume.languages || selectedResume.languages.length === 0 ? (
+                      <p className="text-[0.83rem] text-[var(--text-muted)] italic">Aucune langue renseignée.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedResume.languages.map((l) => (
+                          <span key={l.id || l.title} className="tag">{l.title || l}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {resumeError && (
+              <div className="alert alert-danger scale-in my-3">
+                <span>{resumeError}</span>
+              </div>
+            )}
+
+            <div className="modal-actions mt-auto">
+              <button className="btn btn-secondary" onClick={() => setSelectedResume(null)}>Fermer</button>
             </div>
           </div>
         </div>,
