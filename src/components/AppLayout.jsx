@@ -1,16 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-
-/* Brand mark reused in sidebar + mobile topbar */
-const Logo = ({ className = '' }) => (
-  <div className={`flex items-center gap-2.5 text-[1.2rem] font-bold tracking-tight text-[var(--text-primary)] ${className}`}>
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6">
-      <rect x="3" y="3" width="18" height="18" rx="6" fill="var(--primary)" />
-      <path d="M9 8v8M15 8v8M9 12h6" stroke="var(--primary-foreground)" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-    <span>HireMe</span>
-  </div>
-);
+import Logo from './Logo';
 
 const ICONS = {
   dashboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px] flex-shrink-0"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>,

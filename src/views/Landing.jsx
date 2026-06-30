@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Logo from '../components/Logo';
 
 export default function Landing({ onNavigateToLogin, onNavigateToRegister }) {
   // activeSpace: 'candidate' | 'recruiter'
@@ -9,20 +10,7 @@ export default function Landing({ onNavigateToLogin, onNavigateToRegister }) {
       
       {/* Landing Header/Navbar */}
       <header className="landing-header">
-        <div className="landing-logo">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#logo-grad-landing)" />
-            <path d="M2 17L12 22L22 17" stroke="url(#logo-grad-landing)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2 12L12 17L22 12" stroke="url(#logo-grad-landing)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <defs>
-              <linearGradient id="logo-grad-landing" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                <stop stopColor="var(--primary)" />
-                <stop offset="1" stopColor="var(--secondary)" />
-              </linearGradient>
-            </defs>
-          </svg>
-          <span>HireMe AI</span>
-        </div>
+        <Logo className="landing-logo" />
 
         {/* Premium Space Segmented Selector */}
         <div className="landing-space-selector">
@@ -347,6 +335,10 @@ export default function Landing({ onNavigateToLogin, onNavigateToRegister }) {
           align-items: center;
           gap: 10px;
           color: var(--text-primary);
+        }
+        .landing-logo svg {
+          width: 28px;
+          height: 28px;
         }
         
         /* Glassmorphic Pill Switcher */
