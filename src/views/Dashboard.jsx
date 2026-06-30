@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -58,6 +59,7 @@ export default function Dashboard({ onNavigateToBuilder }) {
   const [recoLoading, setRecoLoading] = useState(true);
   const [applications, setApplications] = useState([]);
   const [appsLoading, setAppsLoading] = useState(true);
+  const [detailJob, setDetailJob] = useState(null);
 
   // Assemble the textual representation of a resume for the matching engine.
   const buildResumeText = (r) => {
@@ -279,7 +281,7 @@ export default function Dashboard({ onNavigateToBuilder }) {
                 </div>
                 <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 max-[500px]:flex-row max-[500px]:w-full max-[500px]:justify-between max-[500px]:items-center">
                   {rec.pct !== null && <span className={`text-[0.74rem] font-bold px-2.5 py-[3px] rounded-full ${scorePillClass(rec.pct)}`}>{rec.pct} %</span>}
-                  <button className="btn btn-secondary btn-sm" onClick={() => navigate('/jobs')}>Postuler</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => rec.job && setDetailJob(rec.job)} disabled={!rec.job}>Détails</button>
                 </div>
               </div>
             ))
@@ -375,6 +377,58 @@ export default function Dashboard({ onNavigateToBuilder }) {
           </div>
         )}
       </section>
+
+      {/* Details modal — rendu via portal sur document.body */}
+      {detailJob && createPortal(
+        <div className="modal-overlay" onClick={() => setDetailJob(null)}>
+          <div className="card modal-box scale-in !max-w-[560px] max-h-[85vh] overflow-y-auto flex flex-col text-left" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h2 className="text-[1.25rem] font-bold text-[var(--text-primary)]">{detailJob.title}</h2>
+                <p className="text-[var(--primary)] font-semibold mt-1">{detailJob.company}</p>
+              </div>
+              <button className="bg-transparent border-none cursor-pointer p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] inline-flex" onClick={() => setDetailJob(null)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            <div className="border-b border-[var(--card-border)] my-4 w-full"></div>
+
+            <div className="flex flex-wrap gap-2 mb-4">
+              {detailJob.location && <span className="job-tag">📍 {detailJob.location}</span>}
+              {detailJob.contractType && <span className="job-tag">{CONTRACT_LABELS[detailJob.contractType] || detailJob.contractType}</span>}
+              {detailJob.remotePolicy && <span className="job-tag">{REMOTE_LABELS[detailJob.remotePolicy] || detailJob.remotePolicy}</span>}
+              {(detailJob.salaryMin || detailJob.salaryMax) && (
+                <span className="job-tag">
+                  💼 {detailJob.salaryMin ? `${detailJob.salaryMin}` : ''}{detailJob.salaryMax ? `–${detailJob.salaryMax}` : ''} € / an
+                </span>
+              )}
+            </div>
+
+            <div className="mb-4">
+              <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Description du poste</h4>
+              <p className="text-[0.88rem] text-[var(--text-secondary)] whitespace-pre-line leading-relaxed">{detailJob.description}</p>
+            </div>
+
+            {detailJob.requiredSkills && Array.from(detailJob.requiredSkills).length > 0 && (
+              <div className="mb-5">
+                <h4 className="text-[0.74rem] font-bold tracking-[0.05em] uppercase text-[var(--text-muted)] mb-2">Compétences requises</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from(detailJob.requiredSkills).map((s) => (
+                    <span className="skill-pill" key={s}>{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="modal-actions mt-4">
+              <button className="btn btn-secondary" onClick={() => setDetailJob(null)}>Fermer</button>
+              <button className="btn btn-primary" onClick={() => { setDetailJob(null); navigate('/jobs'); }}>Postuler à cette offre</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );

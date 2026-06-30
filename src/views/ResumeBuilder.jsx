@@ -69,13 +69,6 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
 
   const accent = THEMES[activeTheme];
 
-  useEffect(() => {
-    fetchGlobals();
-    if (activeResumeId) fetchResume(activeResumeId);
-    else seedFromUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeResumeId]);
-
   const seedFromUser = () => {
     setFirstName(user?.name || user?.firstName || '');
     setLastName(user?.lastName || '');
@@ -145,6 +138,13 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
       console.error('Failed to load skills/languages catalog', e);
     }
   };
+
+  useEffect(() => {
+    fetchGlobals();
+    if (activeResumeId) fetchResume(activeResumeId);
+    else seedFromUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeResumeId]);
 
   // Persist name + professional title to the candidate profile when changed.
   const syncProfile = async () => {
@@ -299,10 +299,10 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
   const previewName = `${firstName} ${lastName}`.trim() || 'Votre Nom';
 
   const TABS = [
-    { key: 'general', label: 'Général & Contact' },
+    { key: 'general', label: 'Général' },
     { key: 'experiences', label: 'Expériences' },
     { key: 'educations', label: 'Formations' },
-    { key: 'tags', label: 'Compétences & Langues' }
+    { key: 'tags', label: 'Compétences' }
   ];
 
   return (
@@ -347,13 +347,13 @@ export default function ResumeBuilder({ resumeId, onBackToDashboard }) {
 
         {/* EDITOR */}
         <div className="border-r border-[var(--card-border)] bg-[var(--bg-secondary)] overflow-y-auto flex flex-col max-[980px]:border-r-0 max-[980px]:border-b">
-          <div className="flex gap-0.5 px-4 pt-3 sticky top-0 bg-[var(--bg-secondary)] border-b border-[var(--card-border)] z-[5] overflow-x-auto">
+          <div className="flex flex-wrap gap-2 px-4 py-3 sticky top-0 bg-[var(--bg-secondary)] border-b border-[var(--card-border)] z-[5]">
             {TABS.map((t) => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`px-3 py-2.5 text-[0.83rem] font-semibold cursor-pointer border-b-2 whitespace-nowrap transition-colors ${
+                className={`px-3.5 py-1.5 text-[0.8rem] font-semibold cursor-pointer rounded-full border transition-all ${
                   activeTab === t.key
-                    ? 'text-[var(--primary)] border-[var(--primary)]'
-                    : 'text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)]'
+                    ? 'border-[var(--primary)] text-[var(--primary)] bg-[var(--primary-glow)]'
+                    : 'border-[var(--card-border)] text-[var(--text-secondary)] bg-[var(--card-bg)] hover:text-[var(--text-primary)] hover:border-[var(--text-muted)]'
                 }`}>
                 {t.label}
               </button>
