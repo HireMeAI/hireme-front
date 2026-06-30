@@ -1,26 +1,67 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 
+const CONTRACT_LABELS = {
+  FULL_TIME: 'CDI', PART_TIME: 'Temps partiel', FREELANCE: 'Freelance',
+  FIXED_TERM: 'CDD', INTERNSHIP: 'Stage'
+};
+const REMOTE_LABELS = {
+  ON_SITE: 'Présentiel', HYBRID: 'Hybride', REMOTE: 'Télétravail'
+};
+
+const STATUS_LABELS = {
+  SUBMITTED: 'Envoyée', VIEWED: 'En revue', ACCEPTED: 'Acceptée', REJECTED: 'Refusée'
+};
+const STATUS_DOT = {
+  SUBMITTED: 'bg-[var(--text-muted)]', VIEWED: 'bg-[var(--info)]',
+  ACCEPTED: 'bg-[var(--success)]', REJECTED: 'bg-[var(--danger)]'
+};
+
+// Small palette to colour offer logos deterministically by index.
+const LOGO_COLORS = ['hsl(12,58%,50%)', 'hsl(210,55%,48%)', 'hsl(150,45%,38%)', 'hsl(34,78%,48%)', 'hsl(270,45%,52%)'];
+
+/** Normalise un score de matching (0..1 ou 0..100) en pourcentage entier. */
+const toPercent = (score) => {
+  if (score === null || score === undefined) return null;
+  const pct = score <= 1 ? score * 100 : score;
+  return Math.round(pct);
+};
+const scorePillClass = (pct) =>
+  pct >= 75
+    ? 'bg-[var(--success-bg)] text-[var(--success)]'
+    : pct >= 50
+      ? 'bg-[hsla(34,78%,48%,0.14)] text-[var(--warning)]'
+      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]';
+
+const initialsOf = (text) =>
+  (text || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+
+const PANEL = 'bg-[var(--card-bg)] border border-[var(--card-border)] rounded-[14px] p-[22px]';
+
 export default function Dashboard({ onNavigateToBuilder }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [resumes, setResumes] = useState([]);
-  const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Create modal states
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newSummary, setNewSummary] = useState('');
-  const [newSlug, setNewSlug] = useState('');
-  const [newVisibility, setNewVisibility] = useState('PUBLIC');
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [createLoading, setCreateLoading] = useState(false);
-  const [createError, setCreateError] = useState(null);
+
+  // Recommendations + applications (right column + stats)
+  const [recommendations, setRecommendations] = useState([]);
+  const [recoLoading, setRecoLoading] = useState(true);
+  const [applications, setApplications] = useState([]);
+  const [appsLoading, setAppsLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchData = async () => {
@@ -28,14 +69,13 @@ export default function Dashboard({ onNavigateToBuilder }) {
     setLoading(true);
     setError(null);
     try {
-      // List all resumes for the current logged-in candidate
-      // The API client automatically maps `api.resumes.list(userId)`
       const list = await api.resumes.list(user.id);
-      setResumes(list || []);
+      const resumeList = list || [];
+      setResumes(resumeList);
 
-      // Load templates to pre-populate selection dropdown
-      const tmplList = await api.templates.list();
-      setTemplates(tmplList || []);
+      // Fire the two AI-backed sections in parallel (non-blocking for the page).
+      loadRecommendations(resumeList);
+      loadApplications(resumeList);
     } catch (err) {
       setError(err.message || 'Impossible de récupérer vos CV.');
     } finally {
@@ -43,535 +83,289 @@ export default function Dashboard({ onNavigateToBuilder }) {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce CV ? Cette action est irréversible.')) {
+  // Assemble the textual representation of a resume for the matching engine.
+  const buildResumeText = (r) => {
+    if (!r) return '';
+    const parts = [r.title, r.summary, user?.title, user?.bio];
+    (r.experiences || []).forEach((exp) =>
+      parts.push([exp.position, exp.company, exp.description].filter(Boolean).join(' - ')));
+    (r.educations || []).forEach((edu) =>
+      parts.push([edu.degree, edu.institution, edu.description].filter(Boolean).join(' - ')));
+    const skills = (r.skills || []).map((s) => s.title).filter(Boolean);
+    if (skills.length) parts.push(`Compétences: ${skills.join(', ')}`);
+    const langs = (r.languages || []).map((l) => l.title).filter(Boolean);
+    if (langs.length) parts.push(`Langues: ${langs.join(', ')}`);
+    return parts.filter(Boolean).join('. ');
+  };
+
+  const buildKnownPii = (r) =>
+    [user?.name, user?.firstName, user?.lastName, user?.fullName, user?.email,
+      r?.contact?.email, r?.contact?.phone, r?.contact?.linkedin].filter(Boolean);
+
+  // Top recommended offers, computed against the candidate's primary resume.
+  const loadRecommendations = async (resumeList) => {
+    const primary = resumeList[0];
+    const resumeText = buildResumeText(primary);
+    if (!primary || !resumeText.trim()) {
+      setRecommendations([]);
+      setRecoLoading(false);
       return;
     }
-    
+    setRecoLoading(true);
+    try {
+      const recos = await api.matching.recommend({
+        resumeText,
+        knownPii: buildKnownPii(primary),
+        topN: 5
+      });
+      const enriched = await Promise.all(
+        (recos || []).map(async (rec) => {
+          let job = null;
+          try { job = await api.jobs.getById(rec.jobId); } catch { /* offre fermée */ }
+          return { jobId: rec.jobId, pct: toPercent(rec.score), job };
+        })
+      );
+      setRecommendations(enriched);
+    } catch {
+      setRecommendations([]);
+    } finally {
+      setRecoLoading(false);
+    }
+  };
+
+  // Aggregate applications across every resume, enrich with job title/company.
+  const loadApplications = async (resumeList) => {
+    if (!resumeList.length) {
+      setApplications([]);
+      setAppsLoading(false);
+      return;
+    }
+    setAppsLoading(true);
+    try {
+      const perResume = await Promise.all(
+        resumeList.map((r) =>
+          api.matching.getByResume(r.id).then((apps) => apps || []).catch(() => []))
+      );
+      const flat = perResume.flat();
+      const jobIds = [...new Set(flat.map((a) => a.jobOfferId))];
+      const jobEntries = await Promise.all(
+        jobIds.map((id) => api.jobs.getById(id).then((j) => [id, j]).catch(() => [id, null]))
+      );
+      const jobMap = Object.fromEntries(jobEntries);
+
+      const enriched = flat
+        .map((a) => ({
+          ...a,
+          jobTitle: jobMap[a.jobOfferId]?.title || 'Offre',
+          jobCompany: jobMap[a.jobOfferId]?.company || '',
+          pct: toPercent(a.matchScore)
+        }))
+        .sort((a, b) => (b.pct ?? -1) - (a.pct ?? -1));
+      setApplications(enriched);
+    } catch {
+      setApplications([]);
+    } finally {
+      setAppsLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce CV ? Cette action est irréversible.')) return;
     try {
       await api.resumes.delete(id);
-      // Clean delete transition
-      setResumes(resumes.filter(r => r.id !== id));
+      setResumes(resumes.filter((r) => r.id !== id));
     } catch (err) {
       alert(err.message || 'Impossible de supprimer le CV');
     }
   };
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setCreateError(null);
-    setCreateLoading(true);
-    
-    try {
-      const payload = {
-        userId: user.id,
-        title: newTitle,
-        summary: newSummary,
-        portfolioSlug: newSlug || undefined,
-        visibility: newVisibility,
-        templateId: selectedTemplateId || undefined
-      };
+  // Open the full editor in "new" mode (creation now uses the same form as edition).
+  const handleCreate = () => onNavigateToBuilder();
 
-      const newResume = await api.resumes.create(payload);
-      
-      // Close modal & reset fields
-      setIsModalOpen(false);
-      setNewTitle('');
-      setNewSummary('');
-      setNewSlug('');
-      setNewVisibility('PUBLIC');
-      setSelectedTemplateId('');
-      
-      // Navigate straight to builder with this new CV
-      if (newResume && onNavigateToBuilder) {
-        onNavigateToBuilder(newResume.id);
-      } else {
-        fetchData();
-      }
-    } catch (err) {
-      setCreateError(err.message || 'Impossible de créer le CV.');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
+  // Derived stats + profile completion
+  const checklist = [
+    { label: 'Informations personnelles', done: Boolean(user?.name && user?.email) },
+    { label: 'Au moins un CV créé', done: resumes.length > 0 },
+    { label: 'Expériences ajoutées', done: resumes.some((r) => (r.experiences || []).length > 0) },
+    { label: 'Compétences renseignées', done: resumes.some((r) => (r.skills || []).length > 0) }
+  ];
+  const completion = Math.round((checklist.filter((c) => c.done).length / checklist.length) * 100);
+  const activeApps = applications.filter((a) => a.status !== 'REJECTED').length;
 
-  const handleCopyLink = (slug) => {
-    const fullUrl = `${window.location.origin}/portfolio/${slug}`;
-    navigator.clipboard.writeText(fullUrl)
-      .then(() => alert('Lien copié dans le presse-papiers !'))
-      .catch(() => alert('Impossible de copier le lien'));
-  };
-
-  // Stats derivation
-  const publicCount = resumes.filter(r => r.visibility === 'PUBLIC').length;
-  const isProfileComplete = user?.bio && user?.title;
+  const stats = [
+    { label: 'Offres recommandées', value: recoLoading ? '—' : recommendations.length, icon: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></> },
+    { label: 'Candidatures actives', value: appsLoading ? '—' : activeApps, icon: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></> },
+    { label: 'CV créés', value: resumes.length, icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></> },
+    { label: 'Profil complété', value: `${completion} %`, icon: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></> }
+  ];
 
   return (
-    <div className="dashboard-view fade-in container">
-      
-      {/* Upper Welcome Header */}
-      <div className="dash-welcome">
+    <div className="fade-in px-9 py-7 max-w-[1180px] text-left max-[760px]:px-4 max-[760px]:py-5">
+
+      {/* Welcome header */}
+      <div className="flex items-start justify-between gap-4 mb-[26px] flex-wrap">
         <div>
-          <h1>Bonjour, {user?.name || 'Candidat'}</h1>
-          <p>Gérez vos CV intelligents et propulsez votre carrière avec l'IA</p>
+          <h1 className="text-[1.7rem] mb-1 max-[760px]:text-[1.4rem]">Bonjour, {user?.name || 'Candidat'} 👋</h1>
+          <p className="text-[0.95rem]">Voici les offres qui correspondent à votre profil aujourd'hui.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <button className="btn btn-primary max-[500px]:w-full" onClick={handleCreate}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
           Créer un CV
         </button>
       </div>
 
-      {/* Widgets & Stats Panel */}
-      <div className="stats-row">
-        <div className="card stat-card">
-          <div className="stat-icon-wrapper">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Total CV</span>
-            <h3>{resumes.length}</h3>
-          </div>
-        </div>
-
-        <div className="card stat-card">
-          <div className="stat-icon-wrapper">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Visibilité Publique</span>
-            <h3>{publicCount} CV</h3>
-          </div>
-        </div>
-
-        <div className="card stat-card">
-          <div className="stat-icon-wrapper">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          </div>
-          <div className="stat-content">
-            <span className="stat-label">Profil professionnel</span>
-            <h3>{isProfileComplete ? 'Complet' : 'Incomplet'}</h3>
-          </div>
-        </div>
-      </div>
-
       {error && (
-        <div className="alert alert-danger scale-in">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <div className="alert alert-danger scale-in mb-5">
           <span>{error}</span>
         </div>
       )}
 
-      {/* Main Resumes Section */}
-      <div className="resumes-section">
-        <h2>Mes Documents et CV</h2>
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3.5 mb-[30px] max-[1080px]:grid-cols-2 max-[500px]:grid-cols-1">
+        {stats.map((s) => (
+          <div key={s.label} className={`${PANEL} !p-[18px] flex items-center gap-3.5`}>
+            <div className="w-[42px] h-[42px] rounded-[8px] bg-[var(--primary-glow)] text-[var(--primary)] flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">{s.icon}</svg>
+            </div>
+            <div>
+              <div className="text-[0.78rem] text-[var(--text-muted)]">{s.label}</div>
+              <div className="text-[1.5rem] font-bold tracking-[-0.02em] text-[var(--text-primary)]">{s.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main grid: recommended offers + right column */}
+      <div className="grid grid-cols-[1.6fr_1fr] gap-[22px] items-start max-[920px]:grid-cols-1">
+
+        {/* Recommended offers */}
+        <section className={PANEL}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[1.1rem]">Offres recommandées pour vous</h2>
+            <a onClick={() => navigate('/jobs')} className="text-[0.83rem] font-semibold text-[var(--primary)] cursor-pointer hover:text-[var(--primary-hover)]">Tout voir</a>
+          </div>
+
+          {recoLoading ? (
+            <div className="text-center py-6 text-[var(--text-muted)]"><span className="spinner"></span><p className="mt-2.5 text-[0.85rem]">Analyse de votre profil…</p></div>
+          ) : recommendations.length === 0 ? (
+            <p className="text-[var(--text-muted)] text-[0.88rem] italic">
+              {resumes.length === 0
+                ? 'Créez un CV pour recevoir des recommandations personnalisées.'
+                : 'Aucune offre recommandée pour le moment.'}
+            </p>
+          ) : (
+            recommendations.map((rec, i) => (
+              <div key={rec.jobId} className="flex items-center gap-3.5 p-3.5 border border-[var(--card-border)] rounded-[8px] mb-2.5 last:mb-0 transition-all hover:shadow-[var(--shadow-sm)] max-[500px]:flex-wrap">
+                <div className="w-[42px] h-[42px] rounded-[8px] flex-shrink-0 flex items-center justify-center font-bold text-[0.9rem] text-[var(--primary-foreground)]" style={{ background: LOGO_COLORS[i % LOGO_COLORS.length] }}>
+                  {initialsOf(rec.job?.company || rec.job?.title || 'Offre')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <strong className="text-[0.92rem] block text-[var(--text-primary)]">{rec.job?.title || 'Offre'}</strong>
+                  <div className="text-[0.76rem] text-[var(--text-muted)] mt-0.5">
+                    {[rec.job?.company, rec.job?.contractType && (CONTRACT_LABELS[rec.job.contractType] || rec.job.contractType),
+                      rec.job?.location, rec.job?.remotePolicy && (REMOTE_LABELS[rec.job.remotePolicy] || rec.job.remotePolicy)]
+                      .filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 max-[500px]:flex-row max-[500px]:w-full max-[500px]:justify-between max-[500px]:items-center">
+                  {rec.pct !== null && <span className={`text-[0.74rem] font-bold px-2.5 py-[3px] rounded-full ${scorePillClass(rec.pct)}`}>{rec.pct} %</span>}
+                  <button className="btn btn-secondary btn-sm" onClick={() => navigate('/jobs')}>Postuler</button>
+                </div>
+              </div>
+            ))
+          )}
+        </section>
+
+        {/* Right column */}
+        <div className="flex flex-col gap-[22px]">
+
+          {/* Profile completion */}
+          <section className={PANEL}>
+            <div className="flex items-center justify-between mb-4"><h2 className="text-[1.1rem]">Votre profil</h2></div>
+            <p className="text-[0.85rem]">Un profil complet améliore vos recommandations.</p>
+            <div className="h-2 bg-[var(--bg-tertiary)] rounded-full overflow-hidden mt-3 mb-2">
+              <div className="h-full bg-[var(--primary)] rounded-full transition-[width] duration-[400ms]" style={{ width: `${completion}%` }}></div>
+            </div>
+            <div className="text-[0.8rem] text-[var(--text-muted)]">{completion} % complété</div>
+            <ul className="list-none mt-3 flex flex-col gap-[9px]">
+              {checklist.map((c) => (
+                <li key={c.label} className={`flex items-center gap-2.5 text-[0.85rem] ${c.done ? 'text-[var(--success)]' : 'text-[var(--text-secondary)]'}`}>
+                  {c.done ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-[17px] h-[17px] flex-shrink-0"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[17px] h-[17px] flex-shrink-0 text-[var(--text-muted)]"><circle cx="12" cy="12" r="10" /></svg>
+                  )}
+                  {c.label}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {/* Applications tracking */}
+          <section className={PANEL}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[1.1rem]">Mes candidatures</h2>
+              <a onClick={() => navigate('/jobs')} className="text-[0.83rem] font-semibold text-[var(--primary)] cursor-pointer hover:text-[var(--primary-hover)]">Tout voir</a>
+            </div>
+            {appsLoading ? (
+              <div className="text-center py-6 text-[var(--text-muted)]"><span className="spinner"></span></div>
+            ) : applications.length === 0 ? (
+              <p className="text-[var(--text-muted)] text-[0.88rem] italic">Vous n'avez pas encore postulé à une offre.</p>
+            ) : (
+              applications.slice(0, 4).map((a) => (
+                <div key={a.id} className="flex items-center gap-3 py-[11px] border-b border-[var(--card-border)] last:border-b-0">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[a.status] || 'bg-[var(--text-muted)]'}`}></span>
+                  <div className="flex-1 min-w-0">
+                    <strong className="text-[0.85rem] block text-[var(--text-primary)]">{a.jobTitle}</strong>
+                    <span className="text-[0.74rem] text-[var(--text-muted)]">{[a.jobCompany, a.source === 'AUTO' ? 'auto' : null].filter(Boolean).join(' · ')}</span>
+                  </div>
+                  <span className="text-[0.72rem] font-semibold px-2.5 py-[3px] rounded-full bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">{STATUS_LABELS[a.status] || a.status}</span>
+                </div>
+              ))
+            )}
+          </section>
+
+        </div>
+      </div>
+
+      {/* Compact CV list */}
+      <section className={`${PANEL} mt-[30px]`}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[1.1rem]">Mes CV</h2>
+        </div>
 
         {loading ? (
-          <div className="dashboard-loading">
-            <span className="spinner large"></span>
-            <p>Chargement de vos documents...</p>
-          </div>
+          <div className="text-center py-6 text-[var(--text-muted)]"><span className="spinner"></span><p className="mt-2.5 text-[0.85rem]">Chargement de vos documents…</p></div>
         ) : resumes.length === 0 ? (
-          /* Animated Custom Empty State */
-          <div className="card empty-state fade-in">
-            <div className="empty-graphic">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-            </div>
-            <h3>Aucun CV créé pour l'instant</h3>
-            <p>Créez votre tout premier CV intelligent avec notre outil interactif en quelques secondes.</p>
-            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-              Créer mon premier CV
-            </button>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-[var(--text-muted)] text-[0.88rem] italic">Aucun CV créé pour l'instant.</p>
+            <button className="btn btn-primary btn-sm" onClick={handleCreate}>Créer mon premier CV</button>
           </div>
         ) : (
-          /* Resume Cards Grid */
-          <div className="resumes-grid">
+          <div className="flex flex-col">
             {resumes.map((resume) => (
-              <div key={resume.id} className="card resume-card fade-in">
-                <div className="resume-card-header">
-                  <div>
-                    <span className="badge badge-secondary" style={{ marginBottom: '6px' }}>
-                      {resume.visibility}
-                    </span>
-                    <h3 className="resume-title">{resume.title || 'Sans titre'}</h3>
-                  </div>
-                  <div className="resume-actions-menu">
-                    <button className="btn-icon" onClick={() => handleDelete(resume.id)} title="Supprimer">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                    </button>
-                  </div>
+              <div key={resume.id} className="flex items-center gap-3 py-3 border-b border-[var(--card-border)] last:border-b-0">
+                <div className="w-[38px] h-[38px] rounded-[8px] flex-shrink-0 bg-[var(--primary-glow)] text-[var(--primary)] flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
                 </div>
-
-                <p className="resume-desc">
-                  {resume.summary ? (resume.summary.length > 100 ? `${resume.summary.substring(0, 100)}...` : resume.summary) : 'Aucun résumé professionnel rédigé.'}
-                </p>
-
-                <div className="resume-stats-row">
-                  <div className="res-stat">
-                    <span>Expériences</span>
-                    <strong>{resume.experiences?.length || 0}</strong>
-                  </div>
-                  <div className="res-stat">
-                    <span>Formations</span>
-                    <strong>{resume.educations?.length || 0}</strong>
-                  </div>
-                  <div className="res-stat">
-                    <span>Compétences</span>
-                    <strong>{resume.skills?.length || 0}</strong>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <strong className="text-[0.9rem] block text-[var(--text-primary)]">{resume.title || 'Sans titre'}</strong>
+                  <span className="text-[0.76rem] text-[var(--text-muted)]">{(resume.experiences || []).length} expériences · {(resume.skills || []).length} compétences</span>
                 </div>
-
-                <div className="resume-card-footer">
-                  {resume.portfolioSlug ? (
-                    <button className="btn-link text-sm" onClick={() => handleCopyLink(resume.portfolioSlug)}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight: '4px', verticalAlign: 'middle'}}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                      Lien public
-                    </button>
-                  ) : (
-                    <span className="text-muted text-sm italic">Lien public inactif</span>
-                  )}
-                  
-                  <button className="btn btn-secondary btn-sm" onClick={() => onNavigateToBuilder(resume.id)}>
-                    Éditer
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 5"></polyline></svg>
-                  </button>
-                </div>
+                <span className={`text-[0.66rem] font-bold tracking-[0.03em] uppercase px-[7px] py-0.5 rounded-[4px] ${resume.visibility === 'PUBLIC' ? 'bg-[var(--success-bg)] text-[var(--success)]' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'}`}>
+                  {resume.visibility === 'PUBLIC' ? 'Public' : resume.visibility === 'PRIVATE' ? 'Privé' : 'Non listé'}
+                </span>
+                <button className="btn btn-secondary btn-sm" onClick={() => onNavigateToBuilder(resume.id)}>Éditer</button>
+                <button onClick={() => handleDelete(resume.id)} title="Supprimer"
+                  className="border-none bg-transparent cursor-pointer p-[5px] rounded-md text-[var(--text-muted)] inline-flex hover:bg-[var(--bg-tertiary)] hover:text-[var(--danger)]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-[15px] h-[15px]"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                </button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Creation Modal (CSS-controlled beautiful overlay) */}
-      {isModalOpen && (
-        <div className="modal-overlay scale-in">
-          <div className="card modal-card">
-            <div className="modal-header">
-              <h2>Nouveau CV intelligent</h2>
-              <button className="btn-close" onClick={() => setIsModalOpen(false)}>×</button>
-            </div>
-            
-            {createError && (
-              <div className="alert alert-danger scale-in">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                <span>{createError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreate}>
-              <div className="form-group">
-                <label className="form-label">Titre du CV</label>
-                <input 
-                  type="text" 
-                  className="form-control" 
-                  placeholder="Ex: Mon CV Développeur Web" 
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Description / Accroche</label>
-                <textarea 
-                  className="form-control" 
-                  placeholder="Ex: Développeur passionné par l'IA et les technos web..." 
-                  value={newSummary}
-                  onChange={(e) => setNewSummary(e.target.value)}
-                  rows="3"
-                />
-              </div>
-
-              <div className="form-grid">
-                <div className="form-group">
-                  <label className="form-label">Slug de portfolio</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="jean-dupont-dev" 
-                    value={newSlug}
-                    onChange={(e) => setNewSlug(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Visibilité</label>
-                  <select 
-                    className="form-control"
-                    value={newVisibility}
-                    onChange={(e) => setNewVisibility(e.target.value)}
-                  >
-                    <option value="PUBLIC">PUBLIC</option>
-                    <option value="PRIVATE">PRIVATE</option>
-                    <option value="UNLISTED">UNLISTED</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Modèle graphique (Optionnel)</label>
-                <select 
-                  className="form-control"
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                >
-                  <option value="">-- Par défaut --</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.title} ({t.category})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
-                  Annuler
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={createLoading}>
-                  {createLoading ? 'Création...' : 'Créer et Ouvrir'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <style>{`
-        .dashboard-view {
-          padding-top: 10px;
-          padding-bottom: 40px;
-          text-align: left;
-        }
-        .dash-welcome {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 30px;
-        }
-        .dash-welcome h1 {
-          font-size: 1.8rem;
-          margin-bottom: 6px;
-          color: var(--text-primary);
-        }
-        .stats-row {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 16px 20px;
-        }
-        .stat-icon-wrapper {
-          width: 40px;
-          height: 40px;
-          border-radius: var(--radius-sm);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--primary);
-          background: var(--bg-secondary);
-          border: 1px solid var(--card-border);
-        }
-        .stat-content {
-          display: flex;
-          flex-direction: column;
-        }
-        .stat-content .stat-label {
-          font-size: 0.75rem;
-          color: var(--text-muted);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.02em;
-        }
-        .stat-content h3 {
-          font-size: 1.25rem;
-          margin-top: 2px;
-          font-weight: 600;
-        }
-        .resumes-section h2 {
-          font-size: 1.3rem;
-          margin-bottom: 20px;
-          color: var(--text-primary);
-        }
-        .dashboard-loading {
-          text-align: center;
-          padding: 40px 0;
-          color: var(--text-secondary);
-        }
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-          padding: 40px 30px;
-          max-width: 500px;
-          margin: 0 auto;
-        }
-        .empty-graphic {
-          width: 60px;
-          height: 60px;
-          border-radius: var(--radius-sm);
-          background: var(--bg-secondary);
-          color: var(--primary);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 16px;
-          border: 1px solid var(--card-border);
-        }
-        .empty-state h3 {
-          font-size: 1.15rem;
-          margin-bottom: 6px;
-        }
-        .empty-state p {
-          font-size: 0.85rem;
-          margin-bottom: 16px;
-          max-width: 400px;
-        }
-        .resumes-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-          gap: 20px;
-        }
-        .resume-card {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          padding: 20px;
-        }
-        .resume-card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 12px;
-        }
-        .resume-title {
-          font-size: 1.1rem;
-          margin-top: 4px;
-          font-weight: 600;
-        }
-        .btn-icon {
-          background: none;
-          border: none;
-          padding: 6px;
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          transition: var(--transition-fast);
-          display: flex;
-        }
-        .btn-icon:hover {
-          background: var(--bg-secondary);
-        }
-        .resume-desc {
-          font-size: 0.85rem;
-          color: var(--text-secondary);
-          margin-bottom: 16px;
-          flex-grow: 1;
-          line-height: 1.4;
-        }
-        .resume-stats-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          border-top: 1px solid var(--card-border);
-          border-bottom: 1px solid var(--card-border);
-          padding: 10px 0;
-          margin-bottom: 16px;
-          text-align: center;
-        }
-        .res-stat {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .res-stat span {
-          font-size: 0.7rem;
-          color: var(--text-muted);
-        }
-        .res-stat strong {
-          font-size: 0.9rem;
-          color: var(--text-primary);
-        }
-        .resume-card-footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .btn-link {
-          background: none;
-          border: none;
-          color: var(--primary);
-          cursor: pointer;
-          font-weight: 500;
-          font-size: 0.8rem;
-          display: inline-flex;
-          align-items: center;
-        }
-        .btn-link:hover {
-          color: var(--primary-hover);
-          text-decoration: underline;
-        }
-        .italic {
-          font-style: italic;
-        }
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.6);
-          z-index: 200;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 20px;
-        }
-        .modal-card {
-          width: 100%;
-          max-width: 500px;
-          text-align: left;
-        }
-        .modal-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-        }
-        .modal-header h2 {
-          font-size: 1.3rem;
-        }
-        .btn-close {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          color: var(--text-muted);
-          cursor: pointer;
-          line-height: 0.5;
-          transition: var(--transition-fast);
-        }
-        .btn-close:hover {
-          color: var(--text-primary);
-        }
-        .form-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-        @media (max-width: 500px) {
-          .form-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-        .modal-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-          margin-top: 20px;
-          padding-top: 14px;
-          border-top: 1px solid var(--card-border);
-        }
-      `}</style>
     </div>
   );
 }

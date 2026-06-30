@@ -609,6 +609,16 @@ export const api = {
       return handleResponse(res);
     },
 
+    // Top-N open job offers recommended for a CV 
+    recommend: async ({ resumeText, knownPii, topN } = {}) => {
+      const res = await fetch(`${API_BASE_URL}/api/matching/recommendations`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeText, knownPii, topN })
+      });
+      return handleResponse(res);
+    },
+
     // Applications for a given resume, sorted by match score (desc)
     getByResume: async (resumeId) => {
       const res = await fetch(`${API_BASE_URL}/api/matching/${resumeId}`, {
