@@ -123,11 +123,6 @@ body.light-theme {
   --shadow-lg: 0 14px 36px hsla(30, 20%, 30%, 0.10);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
 
 /* Minimal custom scrollbars */
 ::-webkit-scrollbar {
@@ -184,30 +179,40 @@ body.light-theme .bg-mesh {
   background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px);
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--text-primary);
-}
+/* Global element typography lives in @layer base so Tailwind utilities
+   (which sit in the later `utilities` layer) can override it. Views that
+   style elements through unlayered <style> blocks still win over base. */
+@layer base {
+   * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-primary);
+  }
 
-h1 {
-  font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1.15;
-  margin-bottom: 0.5rem;
-}
+  h1 {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.15;
+    margin-bottom: 0.5rem;
+  }
 
-p {
-  color: var(--text-secondary);
-}
+  p {
+    color: var(--text-secondary);
+  }
 
-a {
-  color: var(--primary);
-  text-decoration: none;
-  transition: var(--transition-fast);
-}
-a:hover {
-  color: var(--primary-hover);
+  a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: var(--transition-fast);
+  }
+  a:hover {
+    color: var(--primary-hover);
+  }
 }
 
 /* Premium Button System */
