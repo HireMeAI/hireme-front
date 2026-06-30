@@ -336,7 +336,11 @@ export default function Dashboard({ onNavigateToBuilder }) {
                   {rec.pct !== null && <span className={`text-[0.74rem] font-bold px-2.5 py-[3px] rounded-full ${scorePillClass(rec.pct)}`}>{rec.pct} %</span>}
                   <div className="flex gap-2">
                     <button className="btn btn-secondary btn-sm" onClick={() => rec.job && setDetailJob(rec.job)} disabled={!rec.job}>Détails</button>
-                    <button className="btn btn-primary btn-sm" onClick={() => rec.job && openApply(rec.job)} disabled={!rec.job}>Postuler</button>
+                    {applications.some((a) => a.jobOfferId === rec.jobId) ? (
+                      <button className="btn btn-secondary btn-sm" disabled>Déjà postulé</button>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" onClick={() => rec.job && openApply(rec.job)} disabled={!rec.job}>Postuler</button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -479,7 +483,11 @@ export default function Dashboard({ onNavigateToBuilder }) {
 
             <div className="modal-actions mt-4">
               <button className="btn btn-secondary" onClick={() => setDetailJob(null)}>Fermer</button>
-              <button className="btn btn-primary" onClick={() => { const j = detailJob; setDetailJob(null); openApply(j); }}>Postuler à cette offre</button>
+              {applications.some((a) => a.jobOfferId === detailJob.id) ? (
+                <button className="btn btn-secondary" disabled>Déjà postulé</button>
+              ) : (
+                <button className="btn btn-primary" onClick={() => { const j = detailJob; setDetailJob(null); openApply(j); }}>Postuler à cette offre</button>
+              )}
             </div>
           </div>
         </div>,

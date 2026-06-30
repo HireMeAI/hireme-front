@@ -255,7 +255,11 @@ export default function Jobs() {
                 )}
                 <div className="job-card-footer">
                   <button className="btn btn-secondary btn-sm" style={{ marginRight: '8px' }} onClick={() => setDetailJob(job)}>Détails</button>
-                  <button className="btn btn-primary btn-sm" onClick={() => openApply(job)}>Postuler</button>
+                  {applications.some((a) => a.jobOfferId === job.id) ? (
+                    <button className="btn btn-secondary btn-sm" disabled>Déjà postulé</button>
+                  ) : (
+                    <button className="btn btn-primary btn-sm" onClick={() => openApply(job)}>Postuler</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -382,9 +386,13 @@ export default function Jobs() {
               </div>
             )}
 
-            <div className="modal-actions mt-4">
+             <div className="modal-actions mt-4">
               <button className="btn btn-secondary" onClick={() => setDetailJob(null)}>Fermer</button>
-              <button className="btn btn-primary" onClick={() => { const j = detailJob; setDetailJob(null); openApply(j); }}>Postuler à cette offre</button>
+              {applications.some((a) => a.jobOfferId === detailJob.id) ? (
+                <button className="btn btn-secondary" disabled>Déjà postulé</button>
+              ) : (
+                <button className="btn btn-primary" onClick={() => { const j = detailJob; setDetailJob(null); openApply(j); }}>Postuler à cette offre</button>
+              )}
             </div>
           </div>
         </div>,
