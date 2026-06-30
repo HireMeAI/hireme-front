@@ -73,6 +73,78 @@ export default function Profile() {
     }
   };
 
+  const handleExportData = async () => {
+    setSecurityError(null);
+    setSecurityBusy(true);
+    try {
+      const profile = await api.user.getMe();
+      const resumeList = await api.resumes.list(user.id);
+      
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        rgpdDisclaimer: "Conformément à l'article 20 du RGPD (droit à la portabilité), cet export contient l'intégralité des données personnelles vous concernant collectées sur la plateforme HireMe AI.",
+        user: {
+          id: profile.id,
+          firstName: profile.firstName || profile.name,
+          lastName: profile.lastName,
+          email: profile.email,
+          role: profile.role,
+          bio: profile.bio,
+          desiredJobTitle: profile.desiredJobTitle || profile.title,
+          createdAt: profile.createdAt
+        },
+        resumes: (resumeList || []).map(r => ({
+          id: r.id,
+          title: r.title,
+          summary: r.summary,
+          visibility: r.visibility,
+          portfolioSlug: r.portfolioSlug,
+          contact: r.contact ? {
+            phone: r.contact.phone,
+            email: r.contact.email,
+            address: r.contact.address,
+            city: r.contact.city,
+            postalCode: r.contact.postalCode,
+            linkedin: r.contact.linkedin
+          } : null,
+          experiences: (r.experiences || []).map(exp => ({
+            company: exp.company,
+            title: exp.title,
+            description: exp.description,
+            startDate: exp.startDate,
+            endDate: exp.endDate,
+            current: exp.current
+          })),
+          educations: (r.educations || []).map(edu => ({
+            institution: edu.institution,
+            degree: edu.degree,
+            fieldOfStudy: edu.fieldOfStudy,
+            startDate: edu.startDate,
+            endDate: edu.endDate,
+            description: edu.description
+          })),
+          skills: (r.skills || []).map(s => s.title),
+          languages: (r.languages || []).map(l => l.title)
+        }))
+      };
+
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.href = url;
+      downloadAnchor.download = `hireme-profile-${user.id}.json`;
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      document.body.removeChild(downloadAnchor);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setSecurityError(err.message || 'L\'exportation des données a échoué.');
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
   return (
     <div className="profile-view fade-in container">
       <div className="profile-layout">
@@ -194,6 +266,18 @@ export default function Profile() {
               </div>
               <button className="btn btn-secondary" onClick={handleLogoutAll} disabled={securityBusy}>
                 Déconnecter partout
+              </button>
+            </div>
+
+            <div className="divider"></div>
+
+            <div className="security-row">
+              <div className="security-text">
+                <strong>Exporter mes données (Portabilité RGPD)</strong>
+                <span>Téléchargez l'intégralité de vos informations personnelles et de vos CV au format JSON.</span>
+              </div>
+              <button className="btn btn-secondary" onClick={handleExportData} disabled={securityBusy}>
+                Exporter en JSON
               </button>
             </div>
 

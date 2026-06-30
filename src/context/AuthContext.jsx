@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password, name, lastName, bio, title) => {
     setError(null);
     try {
-      const response = await api.auth.register({ email, password, name, lastName, bio, title });
+      const response = await api.auth.register(email, password, name, lastName, bio, title);
       return response;
     } catch (err) {
       setError(err.message || 'Registration failed');

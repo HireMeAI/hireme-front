@@ -14,6 +14,7 @@ export default function Auth({
   
   const [isLogin, setIsLogin] = useState(initialMode !== 'register');
   const [isResetMode, setIsResetMode] = useState(false);
+  const [isResendVerificationMode, setIsResendVerificationMode] = useState(false);
   const [isChooseNewPasswordMode, setIsChooseNewPasswordMode] = useState(!!resetToken);
   const [role, setRole] = useState('CANDIDATE'); // CANDIDATE, RECRUITER, ADMIN
   
@@ -34,13 +35,6 @@ export default function Auth({
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    setIsLogin(initialMode !== 'register');
-    setIsResetMode(false);
-    setIsChooseNewPasswordMode(!!resetToken);
-    clearAllMessages();
-  }, [initialMode, resetToken]);
-
   const clearAllMessages = () => {
     setError(null);
     setMessage(null);
@@ -48,9 +42,18 @@ export default function Auth({
     if (onClearNotification) onClearNotification();
   };
 
+  useEffect(() => {
+    setIsLogin(initialMode !== 'register');
+    setIsResetMode(false);
+    setIsResendVerificationMode(false);
+    setIsChooseNewPasswordMode(!!resetToken);
+    clearAllMessages();
+  }, [initialMode, resetToken]);
+
   const switchMode = () => {
     setIsLogin(!isLogin);
     setIsResetMode(false);
+    setIsResendVerificationMode(false);
     setIsChooseNewPasswordMode(false);
     if (onResetTokenCleared) onResetTokenCleared();
     clearAllMessages();
@@ -75,13 +78,12 @@ export default function Auth({
     setMessage(null);
     setLoading(true);
     try {
-      let response;
       if (role === 'CANDIDATE') {
-        response = await api.auth.register(email, password, name, lastName, bio, title);
+        await api.auth.register(email, password, name, lastName, bio, title);
       } else if (role === 'RECRUITER') {
-        response = await api.auth.registerRecruiter(email, password, name, lastName, companyName);
+        await api.auth.registerRecruiter(email, password, name, lastName, companyName);
       } else {
-        response = await api.auth.registerAdmin(email, password, name, lastName);
+        await api.auth.registerAdmin(email, password, name, lastName);
       }
       
       setMessage('Compte créé avec succès ! Veuillez vérifier vos e-mails pour confirmer votre compte.');
@@ -104,6 +106,20 @@ export default function Auth({
       setMessage('Si l\'adresse e-mail est enregistrée, vous recevrez un lien de réinitialisation.');
     } catch (err) {
       setError(err.message || 'Erreur lors de la réinitialisation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async (e) => {
+    e.preventDefault();
+    clearAllMessages();
+    setLoading(true);
+    try {
+      await api.auth.resendVerificationEmail(email);
+      setMessage('Un nouvel e-mail de confirmation a été envoyé si l\'adresse est enregistrée.');
+    } catch (err) {
+      setError(err.message || 'Erreur lors du renvoi de l\'e-mail de confirmation.');
     } finally {
       setLoading(false);
     }
@@ -258,6 +274,29 @@ export default function Auth({
               </button>
             </div>
           </form>
+        ) : isResendVerificationMode ? (
+          /* Resend Verification View */
+          <form onSubmit={handleResendVerification} className="auth-form">
+            <div className="form-group">
+              <label className="form-label">Adresse E-mail</label>
+              <input 
+                type="email" 
+                className="form-control" 
+                placeholder="nom@exemple.com" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required 
+              />
+            </div>
+            <button type="submit" className="btn btn-primary w-100" disabled={loading}>
+              {loading ? <span className="spinner"></span> : "Renvoyer l'e-mail de confirmation"}
+            </button>
+            <div className="auth-actions-footer">
+              <button type="button" className="btn-link" onClick={() => { setIsResendVerificationMode(false); clearAllMessages(); }}>
+                Retour à la connexion
+              </button>
+            </div>
+          </form>
         ) : isLogin ? (
           /* Login View */
           <form onSubmit={handleLogin} className="auth-form">
@@ -275,9 +314,15 @@ export default function Auth({
             <div className="form-group">
               <div className="form-label-row">
                 <label className="form-label">Mot de passe</label>
-                <button type="button" className="btn-link text-sm" onClick={() => setIsResetMode(true)}>
-                  Mot de passe oublié ?
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button type="button" className="btn-link text-sm" onClick={() => setIsResetMode(true)}>
+                    Mot de passe oublié ?
+                  </button>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>|</span>
+                  <button type="button" className="btn-link text-sm" onClick={() => setIsResendVerificationMode(true)}>
+                    Email non reçu ?
+                  </button>
+                </div>
               </div>
               <input 
                 type="password" 

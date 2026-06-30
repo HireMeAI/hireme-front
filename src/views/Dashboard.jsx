@@ -59,30 +59,6 @@ export default function Dashboard({ onNavigateToBuilder }) {
   const [applications, setApplications] = useState([]);
   const [appsLoading, setAppsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const fetchData = async () => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await api.resumes.list(user.id);
-      const resumeList = list || [];
-      setResumes(resumeList);
-
-      // Fire the two AI-backed sections in parallel (non-blocking for the page).
-      loadRecommendations(resumeList);
-      loadApplications(resumeList);
-    } catch (err) {
-      setError(err.message || 'Impossible de récupérer vos CV.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Assemble the textual representation of a resume for the matching engine.
   const buildResumeText = (r) => {
     if (!r) return '';
@@ -122,7 +98,7 @@ export default function Dashboard({ onNavigateToBuilder }) {
         (recos || []).map(async (rec) => {
           let job = null;
           try { job = await api.jobs.getById(rec.jobId); } catch { /* offre fermée */ }
-          return { jobId: rec.jobId, pct: toPercent(rec.score), job };
+          return { jobId: rec.jobId, pct: toPercent(rec.score), job, sharedTerms: rec.sharedTerms };
         })
       );
       setRecommendations(enriched);
@@ -168,6 +144,30 @@ export default function Dashboard({ onNavigateToBuilder }) {
       setAppsLoading(false);
     }
   };
+
+  const fetchData = async () => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await api.resumes.list(user.id);
+      const resumeList = list || [];
+      setResumes(resumeList);
+
+      // Fire the two AI-backed sections in parallel (non-blocking for the page).
+      loadRecommendations(resumeList);
+      loadApplications(resumeList);
+    } catch (err) {
+      setError(err.message || 'Impossible de récupérer vos CV.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const handleDelete = async (id) => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce CV ? Cette action est irréversible.')) return;
@@ -266,6 +266,16 @@ export default function Dashboard({ onNavigateToBuilder }) {
                       rec.job?.location, rec.job?.remotePolicy && (REMOTE_LABELS[rec.job.remotePolicy] || rec.job.remotePolicy)]
                       .filter(Boolean).join(' · ')}
                   </div>
+                  {rec.sharedTerms && rec.sharedTerms.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <span className="text-[0.68rem] text-[var(--text-muted)] uppercase tracking-wider font-semibold">Mots-clés en commun :</span>
+                      {rec.sharedTerms.map((term) => (
+                        <span key={term} className="text-[0.66rem] px-1.5 py-[1px] bg-[var(--primary-glow)] text-[var(--primary)] rounded-full font-medium border border-[rgba(10,127,255,0.15)]">
+                          {term}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 max-[500px]:flex-row max-[500px]:w-full max-[500px]:justify-between max-[500px]:items-center">
                   {rec.pct !== null && <span className={`text-[0.74rem] font-bold px-2.5 py-[3px] rounded-full ${scorePillClass(rec.pct)}`}>{rec.pct} %</span>}
