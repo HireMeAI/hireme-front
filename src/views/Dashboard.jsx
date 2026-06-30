@@ -36,6 +36,8 @@ const scorePillClass = (pct) =>
       ? 'bg-[hsla(34,78%,48%,0.14)] text-[var(--warning)]'
       : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]';
 
+const scoreTone = (pct) => (pct >= 75 ? 'high' : pct >= 50 ? 'mid' : 'low');
+
 const initialsOf = (text) =>
   (text || '?')
     .split(/\s+/)
@@ -61,6 +63,14 @@ export default function Dashboard({ onNavigateToBuilder }) {
   const [appsLoading, setAppsLoading] = useState(true);
   const [detailJob, setDetailJob] = useState(null);
 
+  // Apply modal
+  const [applyJob, setApplyJob] = useState(null);
+  const [selectedResumeId, setSelectedResumeId] = useState('');
+  const [note, setNote] = useState('');
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [applyError, setApplyError] = useState(null);
+  const [applyResult, setApplyResult] = useState(null);
+
   // Assemble the textual representation of a resume for the matching engine.
   const buildResumeText = (r) => {
     if (!r) return '';
@@ -79,6 +89,49 @@ export default function Dashboard({ onNavigateToBuilder }) {
   const buildKnownPii = (r) =>
     [user?.name, user?.firstName, user?.lastName, user?.fullName, user?.email,
       r?.contact?.email, r?.contact?.phone, r?.contact?.linkedin].filter(Boolean);
+
+  const buildJobText = (job) => {
+    const skills = (job.requiredSkills && Array.from(job.requiredSkills)) || [];
+    return [job.title, job.description, skills.length ? `Compétences requises: ${skills.join(', ')}` : '']
+      .filter(Boolean)
+      .join('. ');
+  };
+
+  const openApply = (job) => {
+    setApplyJob(job);
+    setApplyError(null);
+    setApplyResult(null);
+    setNote('');
+    setSelectedResumeId(resumes[0]?.id || '');
+  };
+
+  const submitApply = async () => {
+    if (!selectedResumeId) {
+      setApplyError('Veuillez sélectionner un CV.');
+      return;
+    }
+    setApplyLoading(true);
+    setApplyError(null);
+    try {
+      const resume = resumes.find((r) => r.id === selectedResumeId);
+      const result = await api.matching.apply({
+        candidateId: user.id,
+        resumeId: selectedResumeId,
+        jobOfferId: applyJob.id,
+        resumeText: buildResumeText(resume),
+        jobText: buildJobText(applyJob),
+        knownPii: buildKnownPii(resume),
+        note: note || undefined,
+        source: 'WEB'
+      });
+      setApplyResult(result);
+      loadApplications(resumes);
+    } catch (err) {
+      setApplyError(err.message || 'La candidature a échoué.');
+    } finally {
+      setApplyLoading(false);
+    }
+  };
 
   // Top recommended offers, computed against the candidate's primary resume.
   const loadRecommendations = async (resumeList) => {
@@ -281,7 +334,10 @@ export default function Dashboard({ onNavigateToBuilder }) {
                 </div>
                 <div className="text-right flex-shrink-0 flex flex-col items-end gap-1.5 max-[500px]:flex-row max-[500px]:w-full max-[500px]:justify-between max-[500px]:items-center">
                   {rec.pct !== null && <span className={`text-[0.74rem] font-bold px-2.5 py-[3px] rounded-full ${scorePillClass(rec.pct)}`}>{rec.pct} %</span>}
-                  <button className="btn btn-secondary btn-sm" onClick={() => rec.job && setDetailJob(rec.job)} disabled={!rec.job}>Détails</button>
+                  <div className="flex gap-2">
+                    <button className="btn btn-secondary btn-sm" onClick={() => rec.job && setDetailJob(rec.job)} disabled={!rec.job}>Détails</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => rec.job && openApply(rec.job)} disabled={!rec.job}>Postuler</button>
+                  </div>
                 </div>
               </div>
             ))
@@ -423,8 +479,83 @@ export default function Dashboard({ onNavigateToBuilder }) {
 
             <div className="modal-actions mt-4">
               <button className="btn btn-secondary" onClick={() => setDetailJob(null)}>Fermer</button>
-              <button className="btn btn-primary" onClick={() => { setDetailJob(null); navigate('/jobs'); }}>Postuler à cette offre</button>
+              <button className="btn btn-primary" onClick={() => { const j = detailJob; setDetailJob(null); openApply(j); }}>Postuler à cette offre</button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Apply modal — rendu via portal sur document.body */}
+      {applyJob && createPortal(
+        <div className="modal-overlay" onClick={() => !applyLoading && setApplyJob(null)}>
+          <div className="card modal-box scale-in" onClick={(e) => e.stopPropagation()}>
+            {!applyResult ? (
+              <>
+                <h2>Postuler — {applyJob.title}</h2>
+                <p className="modal-sub">{applyJob.company}</p>
+
+                {resumes.length === 0 ? (
+                  <div className="alert alert-danger">
+                    Vous devez d'abord créer un CV avant de postuler.
+                  </div>
+                ) : (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Choisissez le CV à envoyer</label>
+                      <select
+                        className="form-control"
+                        value={selectedResumeId}
+                        onChange={(e) => setSelectedResumeId(e.target.value)}
+                      >
+                        {resumes.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Note au recruteur (optionnel)</label>
+                      <textarea
+                        className="form-control"
+                        rows={3}
+                        placeholder="Quelques mots sur votre motivation…"
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {applyError && <div className="alert alert-danger">{applyError}</div>}
+
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setApplyJob(null)} disabled={applyLoading}>
+                    Annuler
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={submitApply}
+                    disabled={applyLoading || resumes.length === 0}
+                  >
+                    {applyLoading ? 'Analyse IA…' : 'Envoyer ma candidature'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="apply-result">
+                <h2>Candidature envoyée 🎉</h2>
+                <p className="modal-sub">Votre compatibilité avec « {applyJob.title} »</p>
+                {toPercent(applyResult.matchScore) !== null ? (
+                  <div className={`big-score score-${scoreTone(toPercent(applyResult.matchScore))}`}>
+                    {toPercent(applyResult.matchScore)}%
+                  </div>
+                ) : (
+                  <p className="muted-line">Score en cours de calcul…</p>
+                )}
+                <p className="result-status">Statut : <strong>{applyResult.status}</strong></p>
+                <div className="modal-actions">
+                  <button className="btn btn-primary" onClick={() => setApplyJob(null)}>Terminé</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body
