@@ -301,7 +301,16 @@ export default function Landing({ onNavigateToLogin, onNavigateToRegister }) {
       </section>
 
       <footer className="landing-footer">
-        <p>© 2026 HireMe AI. Développé pour l'excellence professionnelle.</p>
+        <p>
+          © 2026 HireMe AI. Développé pour l'excellence professionnelle.
+          <span className="mx-2">•</span>
+          <button 
+            onClick={() => window.dispatchEvent(new Event('open-cookie-settings'))}
+            className="hover:text-[var(--text-primary)] transition-colors cursor-pointer bg-transparent border-none text-[inherit] font-[inherit] p-0 outline-none"
+          >
+            Gérer les cookies
+          </button>
+        </p>
       </footer>
 
       <style>{`

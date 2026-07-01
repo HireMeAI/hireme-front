@@ -9,6 +9,7 @@ import ResumeBuilder from './views/ResumeBuilder';
 import Profile from './views/Profile';
 import Jobs from './views/Jobs';
 import AppLayout from './components/AppLayout';
+import CookieConsent from './components/CookieConsent';
 
 function AppContent() {
   const { isAuthenticated, loading, logout, user } = useAuth();
@@ -117,133 +118,136 @@ function AppContent() {
   );
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route 
-        path="/" 
-        element={
-          isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <>
-              <div className="bg-mesh"></div>
-              <Landing 
-                onNavigateToLogin={() => navigate('/login')} 
-                onNavigateToRegister={() => navigate('/register')} 
-              />
-            </>
-          )
-        } 
-      />
-      
-      <Route 
-        path="/login" 
-        element={
-          isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <>
-              <div className="bg-mesh"></div>
-              <Auth 
-                initialMode="login"
-                onBackToLanding={() => navigate('/')} 
-                resetToken={resetToken}
-                onResetTokenCleared={() => setResetToken(null)}
-                appNotification={appNotification}
-                onClearNotification={() => setAppNotification(null)}
-              />
-            </>
-          )
-        } 
-      />
-
-      <Route 
-        path="/register" 
-        element={
-          isAuthenticated ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <>
-              <div className="bg-mesh"></div>
-              <Auth 
-                initialMode="register"
-                onBackToLanding={() => navigate('/')} 
-                resetToken={resetToken}
-                onResetTokenCleared={() => setResetToken(null)}
-                appNotification={appNotification}
-                onClearNotification={() => setAppNotification(null)}
-              />
-            </>
-          )
-        } 
-      />
-
-      {/* Protected Routes */}
-      <Route
-        path="/dashboard"
-        element={
-          isAuthenticated ? (
-            renderAuthenticatedLayout(
-              isRecruiter || isAdmin
-                ? <RecruiterDashboard />
-                : <Dashboard onNavigateToBuilder={handleNavigateToBuilder} />
+    <>
+      <Routes>
+        {/* Public Routes */}
+        <Route 
+          path="/" 
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <>
+                <div className="bg-mesh"></div>
+                <Landing 
+                  onNavigateToLogin={() => navigate('/login')} 
+                  onNavigateToRegister={() => navigate('/register')} 
+                />
+              </>
             )
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
+          } 
+        />
+        
+        <Route 
+          path="/login" 
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <>
+                <div className="bg-mesh"></div>
+                <Auth 
+                  initialMode="login"
+                  onBackToLanding={() => navigate('/')} 
+                  resetToken={resetToken}
+                  onResetTokenCleared={() => setResetToken(null)}
+                  appNotification={appNotification}
+                  onClearNotification={() => setAppNotification(null)}
+                />
+              </>
+            )
+          } 
+        />
 
-      <Route
-        path="/profile"
-        element={
-          isAuthenticated ? (
-            renderAuthenticatedLayout(<Profile />)
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
+        <Route 
+          path="/register" 
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <>
+                <div className="bg-mesh"></div>
+                <Auth 
+                  initialMode="register"
+                  onBackToLanding={() => navigate('/')} 
+                  resetToken={resetToken}
+                  onResetTokenCleared={() => setResetToken(null)}
+                  appNotification={appNotification}
+                  onClearNotification={() => setAppNotification(null)}
+                />
+              </>
+            )
+          } 
+        />
 
-      <Route
-        path="/jobs"
-        element={
-          isAuthenticated
-            ? isRecruiter || isAdmin
-              ? <Navigate to="/dashboard" replace />
-              : renderAuthenticatedLayout(<Jobs />)
-            : <Navigate to="/login" replace />
-        }
-      />
+        {/* Protected Routes */}
+        <Route
+          path="/dashboard"
+          element={
+            isAuthenticated ? (
+              renderAuthenticatedLayout(
+                isRecruiter || isAdmin
+                  ? <RecruiterDashboard />
+                  : <Dashboard onNavigateToBuilder={handleNavigateToBuilder} />
+              )
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
 
-      <Route
-        path="/builder"
-        element={
-          isAuthenticated
-            ? isRecruiter || isAdmin
-              ? <Navigate to="/dashboard" replace />
-              : renderAuthenticatedLayout(<ResumeBuilder onBackToDashboard={handleBackToDashboard} />)
-            : <Navigate to="/login" replace />
-        }
-      />
+        <Route
+          path="/profile"
+          element={
+            isAuthenticated ? (
+              renderAuthenticatedLayout(<Profile />)
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
 
-      <Route
-        path="/builder/:id"
-        element={
-          isAuthenticated
-            ? isRecruiter || isAdmin
-              ? <Navigate to="/dashboard" replace />
-              : renderAuthenticatedLayout(<ResumeBuilder onBackToDashboard={handleBackToDashboard} />)
-            : <Navigate to="/login" replace />
-        }
-      />
+        <Route
+          path="/jobs"
+          element={
+            isAuthenticated
+              ? isRecruiter || isAdmin
+                ? <Navigate to="/dashboard" replace />
+                : renderAuthenticatedLayout(<Jobs />)
+              : <Navigate to="/login" replace />
+          }
+        />
 
-      {/* Fallback Route */}
-      <Route 
-        path="*" 
-        element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} 
-      />
-    </Routes>
+        <Route
+          path="/builder"
+          element={
+            isAuthenticated
+              ? isRecruiter || isAdmin
+                ? <Navigate to="/dashboard" replace />
+                : renderAuthenticatedLayout(<ResumeBuilder onBackToDashboard={handleBackToDashboard} />)
+              : <Navigate to="/login" replace />
+          }
+        />
+
+        <Route
+          path="/builder/:id"
+          element={
+            isAuthenticated
+              ? isRecruiter || isAdmin
+                ? <Navigate to="/dashboard" replace />
+                : renderAuthenticatedLayout(<ResumeBuilder onBackToDashboard={handleBackToDashboard} />)
+              : <Navigate to="/login" replace />
+          }
+        />
+
+        {/* Fallback Route */}
+        <Route 
+          path="*" 
+          element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} 
+        />
+      </Routes>
+      <CookieConsent />
+    </>
   );
 }
 

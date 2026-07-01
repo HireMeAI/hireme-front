@@ -100,6 +100,10 @@ export default function AppLayout({ user, isRecruiter, isAdmin, isLightTheme, to
             )}
             {isLightTheme ? 'Thème sombre' : 'Thème clair'}
           </button>
+          <button className={navItemClass(false)} onClick={() => window.dispatchEvent(new Event('open-cookie-settings'))}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px] flex-shrink-0"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" /><circle cx="8.5" cy="8.5" r=".5" fill="currentColor"/><circle cx="16" cy="15.5" r=".5" fill="currentColor"/><circle cx="12" cy="12" r=".5" fill="currentColor"/><circle cx="11" cy="17" r=".5" fill="currentColor"/><circle cx="7" cy="14" r=".5" fill="currentColor"/></svg>
+            Gérer les cookies
+          </button>
           <button className={navItemClass(false)} onClick={logout}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px] flex-shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
             Se déconnecter
